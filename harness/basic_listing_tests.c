@@ -23,6 +23,15 @@ static char *read_file(const char *path) {
     return buffer;
 }
 
+static int file_exists(const char *path) {
+    FILE *file = fopen(path, "rb");
+    if (file == NULL) {
+        return 0;
+    }
+    assert(fclose(file) == 0);
+    return 1;
+}
+
 static void test_working_listing_structure(void) {
     char *source = read_file("../AKLABETH.TXT");
     AkBasicLine line;
@@ -59,9 +68,17 @@ static void test_major_line_ranges_are_present(void) {
 
 static void test_archive_listing_cross_check(void) {
     char *working_source = read_file("../AKLABETH.TXT");
-    char *archive_source = read_file("../AKLABETH-org.TXT");
+    char *archive_source;
     AkBasicLine working_line;
     AkBasicLine archive_line;
+
+    if (!file_exists("../AKLABETH-org.TXT")) {
+        fprintf(stderr, "SKIP archive listing cross-check: ../AKLABETH-org.TXT is not present\n");
+        free(working_source);
+        return;
+    }
+
+    archive_source = read_file("../AKLABETH-org.TXT");
 
     assert(ak_basic_count_lines(archive_source) == ak_basic_count_lines(working_source));
     assert(ak_basic_find_line(archive_source, 7000, &archive_line));
@@ -73,9 +90,78 @@ static void test_archive_listing_cross_check(void) {
     free(archive_source);
 }
 
+static void test_behavior_map_source_anchors(void) {
+    char *source = read_file("../AKLABETH.TXT");
+    AkBasicLine line;
+
+    assert(ak_basic_find_line(source, 8, &line));
+    assert(ak_basic_line_contains(&line, "RND ( -  ABS (LN))"));
+
+    assert(ak_basic_find_line(source, 40, &line));
+    assert(ak_basic_line_contains(&line, "TE%(X,Y)"));
+    assert(ak_basic_line_contains(&line, "RND (1) ^ 5"));
+
+    assert(ak_basic_find_line(source, 100, &line));
+    assert(ak_basic_line_contains(&line, "HGR"));
+
+    assert(ak_basic_find_line(source, 202, &line));
+    assert(ak_basic_line_contains(&line, "DNG%"));
+
+    assert(ak_basic_find_line(source, 500, &line));
+    assert(ak_basic_line_contains(&line, "RND ( -  ABS (LN)"));
+
+    assert(ak_basic_find_line(source, 1000, &line));
+    assert(ak_basic_line_contains(&line, "COMMAND?"));
+
+    assert(ak_basic_find_line(source, 1090, &line));
+    assert(ak_basic_line_contains(&line, "YOU HAVE STARVED"));
+
+    assert(ak_basic_find_line(source, 1500, &line));
+    assert(ak_basic_line_contains(&line, "GOSUB 60080"));
+
+    assert(ak_basic_find_line(source, 1650, &line));
+    assert(ak_basic_line_contains(&line, "ATTACK"));
+
+    assert(ak_basic_find_line(source, 1680, &line));
+    assert(ak_basic_line_contains(&line, "PW(5)"));
+
+    assert(ak_basic_find_line(source, 2005, &line));
+    assert(ak_basic_line_contains(&line, "MZ%(X,0)"));
+
+    assert(ak_basic_find_line(source, 4000, &line));
+    assert(ak_basic_line_contains(&line, "MZ%(MM,0)"));
+
+    assert(ak_basic_find_line(source, 4500, &line));
+    assert(ak_basic_line_contains(&line, "MM = 2 OR MM = 7"));
+
+    assert(ak_basic_find_line(source, 6000, &line));
+    assert(ak_basic_line_contains(&line, "WE MOURN THE PASSING"));
+
+    assert(ak_basic_find_line(source, 7000, &line));
+    assert(ak_basic_line_contains(&line, "HOME"));
+
+    assert(ak_basic_find_line(source, 7050, &line));
+    assert(ak_basic_line_contains(&line, "TASK"));
+
+    assert(ak_basic_find_line(source, 60020, &line));
+    assert(ak_basic_line_contains(&line, "HIT POINTS"));
+
+    assert(ak_basic_find_line(source, 60042, &line));
+    assert(ak_basic_line_contains(&line, "BALROG"));
+
+    assert(ak_basic_find_line(source, 60070, &line));
+    assert(ak_basic_line_contains(&line, "MAGIC AMULET"));
+
+    assert(ak_basic_find_line(source, 60220, &line));
+    assert(ak_basic_line_contains(&line, "FOOD"));
+
+    free(source);
+}
+
 int main(void) {
     test_working_listing_structure();
     test_major_line_ranges_are_present();
     test_archive_listing_cross_check();
+    test_behavior_map_source_anchors();
     return 0;
 }

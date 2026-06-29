@@ -2,10 +2,10 @@
 
 | ID | Status | Title |
 | --- | --- | --- |
-| F-001 | Planned | Source listing characterization harness |
-| F-002 | Planned | BASIC behavior map and extraction fixtures |
-| F-003 | Planned | Portable game state and command model |
-| F-004 | Planned | Applesoft-compatible random adapter |
+| F-001 | Implemented | Source listing characterization harness |
+| F-002 | Implemented | BASIC behavior map and extraction fixtures |
+| F-003 | Implemented | Portable game state and command model |
+| F-004 | Implemented | Applesoft-compatible random adapter |
 | F-005 | Planned | Startup, character creation, and store rules |
 | F-006 | Planned | Overworld generation, movement, and town entry |
 | F-007 | Planned | Dungeon generation, navigation, and encounters |
