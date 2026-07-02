@@ -3,6 +3,8 @@
 
 #include <stddef.h>
 
+#include "ak_random.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -10,6 +12,9 @@ extern "C" {
 #define AK_GAME_STAT_COUNT 6
 #define AK_GAME_ITEM_COUNT 6
 #define AK_GAME_MAX_EVENTS 8
+#define AK_GAME_OVERWORLD_SIZE 21
+#define AK_GAME_DUNGEON_SIZE 11
+#define AK_GAME_MONSTER_COUNT 10
 
 typedef enum {
     AK_GAME_MODE_STARTUP_LUCKY_NUMBER = 0,
@@ -65,6 +70,27 @@ typedef enum {
 } AkGameItem;
 
 typedef enum {
+    AK_GAME_TILE_OPEN = 0,
+    AK_GAME_TILE_MOUNTAIN = 1,
+    AK_GAME_TILE_FIELD = 2,
+    AK_GAME_TILE_TOWN = 3,
+    AK_GAME_TILE_DUNGEON = 4,
+    AK_GAME_TILE_CASTLE = 5
+} AkGameTile;
+
+typedef enum {
+    AK_GAME_DUNGEON_OPEN = 0,
+    AK_GAME_DUNGEON_WALL = 1,
+    AK_GAME_DUNGEON_TRAP = 2,
+    AK_GAME_DUNGEON_SECRET_DOOR = 3,
+    AK_GAME_DUNGEON_HIDDEN_DOOR = 4,
+    AK_GAME_DUNGEON_CHEST = 5,
+    AK_GAME_DUNGEON_LADDER_DOWN = 7,
+    AK_GAME_DUNGEON_LADDER_UP = 8,
+    AK_GAME_DUNGEON_LADDER_DOWN_ALT = 9
+} AkGameDungeonTile;
+
+typedef enum {
     AK_GAME_COMMAND_NONE = 0,
     AK_GAME_COMMAND_SET_LUCKY_NUMBER,
     AK_GAME_COMMAND_SET_LEVEL,
@@ -93,6 +119,7 @@ typedef enum {
     AK_GAME_RESULT_OK = 0,
     AK_GAME_RESULT_INVALID_ARGUMENT,
     AK_GAME_RESULT_INVALID_COMMAND,
+    AK_GAME_RESULT_REJECTED,
     AK_GAME_RESULT_UNSUPPORTED_RULE
 } AkGameResultCode;
 
@@ -137,6 +164,12 @@ typedef struct {
     int level_of_play;
     int stats[AK_GAME_STAT_COUNT];
     int inventory[AK_GAME_ITEM_COUNT];
+    int overworld[AK_GAME_OVERWORLD_SIZE][AK_GAME_OVERWORLD_SIZE];
+    int dungeon[AK_GAME_DUNGEON_SIZE][AK_GAME_DUNGEON_SIZE];
+    int monster_active[AK_GAME_MONSTER_COUNT + 1];
+    int monster_x[AK_GAME_MONSTER_COUNT + 1];
+    int monster_y[AK_GAME_MONSTER_COUNT + 1];
+    int monster_hit_points[AK_GAME_MONSTER_COUNT + 1];
     int overworld_x;
     int overworld_y;
     int dungeon_x;
@@ -144,6 +177,7 @@ typedef struct {
     int dungeon_level;
     int quest_target;
     int command_count;
+    AkRandom random;
 } AkGameState;
 
 void ak_game_init(AkGameState *state);
@@ -157,6 +191,8 @@ AkGameResultCode ak_game_apply_command(
 const char *ak_game_mode_name(AkGameMode mode);
 const char *ak_game_location_name(AkGameLocation location);
 const char *ak_game_item_name(AkGameItem item);
+const char *ak_game_tile_name(AkGameTile tile);
+const char *ak_game_dungeon_tile_name(AkGameDungeonTile tile);
 
 #ifdef __cplusplus
 }
