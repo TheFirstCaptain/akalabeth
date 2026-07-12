@@ -29,7 +29,7 @@ This document records the observed Akalabeth architecture and the target moderni
 
 - Portable core: source parsing helpers, deterministic game-state rules, generation, movement, combat, store, quest, and render-command contracts.
 - Adapters: Apple II-compatible random-number behavior, keyboard command mapping, rendering backend, persistence, and asset/screenshot reference loading.
-- App shell: future platform lifecycle, windows, menus, save locations, and user-facing settings.
+- App shell: SwiftPM/AppKit lifecycle, windows, menus, keyboard input, debug fixtures, save locations, and user-facing settings.
 
 ## Current Harness
 
@@ -37,7 +37,11 @@ This document records the observed Akalabeth architecture and the target moderni
 - `Core/include/ak_game.h` and `Core/src/ak_game.c` provide the portable state, command, result, and event model for extracted startup, store, overworld, dungeon, combat, magic, death, and quest rules.
 - `Core/include/ak_random.h` and `Core/src/ak_random.c` provide a deterministic portable `RND` adapter for future generated-map, dungeon, combat, and loot rules.
 - `Core/include/ak_render.h` and `Core/src/ak_render.c` provide a portable Apple II-style render command contract for text, high-resolution line art, status panels, prompts, tiles, and creature sprites.
+- `Package.swift` defines `CAkalabeth`, `AkalabethMac`, and `AkalabethApp` targets for building a native macOS shell around the portable core.
+- `Sources/AkalabethMac/GameSession.swift` maps Mac-facing input flows to portable core commands without depending on AppKit.
+- `Sources/AkalabethApp/main.swift` owns AppKit window, menu, keyboard event, debug fixture, smoke-test, and render-adapter behavior.
 - `harness/basic_listing_tests.c` characterizes high-value structural facts about `AKLABETH.TXT` and `AKLABETH-org.TXT`.
 - `harness/game_model_tests.c` validates deterministic game-state initialization and command/result behavior before detailed Applesoft rules are extracted.
 - `harness/random_tests.c` validates the portable random adapter contract and representative source expression shapes.
 - `harness/render_tests.c` validates representative render command streams for startup, town, overworld, dungeon, quest, and victory screens.
+- `Tests/AkalabethMacTests/GameSessionTests.swift` validates Swift session input mapping and fixture behavior for the macOS shell.
