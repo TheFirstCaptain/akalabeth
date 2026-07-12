@@ -26,7 +26,8 @@ typedef enum {
     AK_GAME_MODE_DUNGEON,
     AK_GAME_MODE_COMBAT,
     AK_GAME_MODE_DEATH,
-    AK_GAME_MODE_QUEST
+    AK_GAME_MODE_QUEST,
+    AK_GAME_MODE_VICTORY
 } AkGameMode;
 
 typedef enum {
@@ -191,6 +192,7 @@ AkGameResultCode ak_game_apply_command(
 const char *ak_game_mode_name(AkGameMode mode);
 const char *ak_game_location_name(AkGameLocation location);
 const char *ak_game_item_name(AkGameItem item);
+const char *ak_game_monster_name(int monster);
 const char *ak_game_tile_name(AkGameTile tile);
 const char *ak_game_dungeon_tile_name(AkGameDungeonTile tile);
 

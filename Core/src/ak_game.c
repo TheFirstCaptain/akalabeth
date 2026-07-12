@@ -13,6 +13,20 @@ static const int AK_GAME_ITEM_PRICES[AK_GAME_ITEM_COUNT] = {
     15
 };
 
+static const char *AK_GAME_MONSTER_NAMES[AK_GAME_MONSTER_COUNT + 1] = {
+    "",
+    "skeleton",
+    "thief",
+    "giant_rat",
+    "orc",
+    "viper",
+    "carrion_crawler",
+    "gremlin",
+    "mimic",
+    "daemon",
+    "balrog"
+};
+
 static void push_event(
     AkGameCommandResult *result,
     AkGameEventType type,
@@ -78,6 +92,13 @@ static int is_overworld_move(AkGameCommandType type) {
 
 static int is_valid_item(AkGameItem item) {
     return item >= AK_GAME_ITEM_FOOD && item <= AK_GAME_ITEM_MAGIC_AMULET;
+}
+
+static int is_weapon_item(AkGameItem item) {
+    return item == AK_GAME_ITEM_RAPIER ||
+        item == AK_GAME_ITEM_AXE ||
+        item == AK_GAME_ITEM_SHIELD ||
+        item == AK_GAME_ITEM_BOW;
 }
 
 static int class_can_buy_item(AkGameClass player_class, AkGameItem item) {
@@ -222,6 +243,27 @@ static int active_monster_at(const AkGameState *state, int x, int y) {
     }
 
     return 0;
+}
+
+static int find_first_owned_item(const AkGameState *state, AkRandom *random) {
+    int attempts;
+
+    for (attempts = 0; attempts < 32; attempts++) {
+        int item = ak_random_int(random, 6.0, 0.0);
+        if (item >= AK_GAME_ITEM_FOOD &&
+            item < AK_GAME_ITEM_COUNT &&
+            state->inventory[item] > 0) {
+            return item;
+        }
+    }
+
+    for (attempts = 0; attempts < AK_GAME_ITEM_COUNT; attempts++) {
+        if (state->inventory[attempts] > 0) {
+            return attempts;
+        }
+    }
+
+    return -1;
 }
 
 static int dungeon_tile_at(const AkGameState *state, int x, int y) {
@@ -422,6 +464,21 @@ static void run_dungeon_monster_turns(AkGameState *state, AkGameCommandResult *r
         }
 
         if (dungeon_adjacent_to_player(state, monster)) {
+            if ((monster == 2 || monster == 7) &&
+                ak_random_rnd(&state->random, 1.0) >= 0.5) {
+                if (monster == 7) {
+                    state->inventory[AK_GAME_ITEM_FOOD] /= 2;
+                    push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, monster);
+                } else {
+                    int item = find_first_owned_item(state, &state->random);
+                    if (item >= 0) {
+                        state->inventory[item]--;
+                        push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, item);
+                    }
+                }
+                continue;
+            }
+
             int shield_bonus = state->inventory[AK_GAME_ITEM_SHIELD] > 0 ? 1 : 0;
             double attack = ak_random_rnd(&state->random, 1.0) * 20.0 -
                 (double)shield_bonus -
@@ -470,6 +527,210 @@ static void run_dungeon_monster_turns(AkGameState *state, AkGameCommandResult *r
             push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, monster);
         }
     }
+}
+
+static int weapon_damage_base(AkGameItem item) {
+    switch (item) {
+        case AK_GAME_ITEM_RAPIER: return 10;
+        case AK_GAME_ITEM_AXE: return 5;
+        case AK_GAME_ITEM_SHIELD: return 1;
+        case AK_GAME_ITEM_BOW: return 4;
+        default: return 0;
+    }
+}
+
+static int find_attack_target(const AkGameState *state, int ranged) {
+    int distance;
+    int limit = ranged ? 5 : 1;
+
+    for (distance = 1; distance <= limit; distance++) {
+        int x = state->dungeon_x + direction_dx(state->facing) * distance;
+        int y = state->dungeon_y + direction_dy(state->facing) * distance;
+        int monster;
+
+        if (x < 1 || x > 9 || y < 0 || y > 9) {
+            break;
+        }
+
+        monster = active_monster_at(state, x, y);
+        if (monster > 0) {
+            return monster;
+        }
+    }
+
+    return 0;
+}
+
+static void kill_monster(AkGameState *state, int monster) {
+    int reward = monster + state->dungeon_level;
+
+    state->stats[AK_GAME_STAT_GOLD] += reward;
+    state->monster_active[monster] = 0;
+    state->monster_hit_points[monster] = 0;
+    state->dungeon[state->monster_x[monster]][state->monster_y[monster]] = AK_GAME_DUNGEON_OPEN;
+    if (monster == state->quest_target) {
+        state->quest_target = -state->quest_target;
+    }
+}
+
+static AkGameResultCode apply_attack(
+    AkGameState *state,
+    const AkGameCommand *command,
+    AkGameCommandResult *result
+) {
+    AkGameItem item = command->item;
+    int damage_base;
+    int ranged;
+    int monster;
+    double hit_roll;
+    int damage;
+
+    if (!is_weapon_item(item) && is_valid_item((AkGameItem)command->value)) {
+        item = (AkGameItem)command->value;
+    }
+    if (!is_weapon_item(item)) {
+        item = AK_GAME_ITEM_FOOD;
+    }
+
+    damage_base = weapon_damage_base(item);
+    if (is_weapon_item(item)) {
+        if (state->inventory[item] < 1) {
+            push_event(result, AK_GAME_EVENT_ERROR, state, AK_GAME_COMMAND_ATTACK, item);
+            return AK_GAME_RESULT_REJECTED;
+        }
+        if (!class_can_buy_item(state->player_class, item)) {
+            push_event(result, AK_GAME_EVENT_ERROR, state, AK_GAME_COMMAND_ATTACK, item);
+            return AK_GAME_RESULT_REJECTED;
+        }
+    }
+
+    ranged = item == AK_GAME_ITEM_BOW;
+    monster = find_attack_target(state, ranged);
+    hit_roll = (double)state->stats[AK_GAME_STAT_DEXTERITY] -
+        ak_random_rnd(&state->random, 1.0) * 25.0;
+
+    state->command_count++;
+    push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, AK_GAME_COMMAND_ATTACK, item);
+
+    if (monster < 1 || hit_roll < (double)(monster + state->dungeon_level)) {
+        push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_ATTACK, 0);
+        return AK_GAME_RESULT_OK;
+    }
+
+    damage = (int)(ak_random_rnd(&state->random, 1.0) * (double)damage_base +
+        (double)state->stats[AK_GAME_STAT_STRENGTH] / 5.0);
+    state->monster_hit_points[monster] -= damage;
+    push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_ATTACK, monster);
+    if (state->monster_hit_points[monster] < 1) {
+        kill_monster(state, monster);
+        push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_ATTACK, -monster);
+    }
+
+    return AK_GAME_RESULT_OK;
+}
+
+static AkGameResultCode apply_magic(
+    AkGameState *state,
+    const AkGameCommand *command,
+    AkGameCommandResult *result
+) {
+    int choice = command->value;
+
+    if (state->inventory[AK_GAME_ITEM_MAGIC_AMULET] < 1) {
+        push_event(result, AK_GAME_EVENT_ERROR, state, AK_GAME_COMMAND_CAST_MAGIC, AK_GAME_ITEM_MAGIC_AMULET);
+        return AK_GAME_RESULT_REJECTED;
+    }
+
+    if (state->player_class == AK_GAME_CLASS_FIGHTER) {
+        choice = ak_random_int(&state->random, 4.0, 1.0);
+    }
+    if (choice < 1 || choice > 4) {
+        push_event(result, AK_GAME_EVENT_ERROR, state, AK_GAME_COMMAND_CAST_MAGIC, choice);
+        return AK_GAME_RESULT_INVALID_COMMAND;
+    }
+
+    if (ak_random_chance_greater_than(&state->random, 0.75)) {
+        state->inventory[AK_GAME_ITEM_MAGIC_AMULET]--;
+    }
+
+    state->command_count++;
+    push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, AK_GAME_COMMAND_CAST_MAGIC, choice);
+
+    if (choice == 1) {
+        state->dungeon[state->dungeon_x][state->dungeon_y] = AK_GAME_DUNGEON_LADDER_UP;
+        push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, AK_GAME_DUNGEON_LADDER_UP);
+        return AK_GAME_RESULT_OK;
+    }
+    if (choice == 2) {
+        state->dungeon[state->dungeon_x][state->dungeon_y] = AK_GAME_DUNGEON_LADDER_DOWN;
+        push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, AK_GAME_DUNGEON_LADDER_DOWN);
+        return AK_GAME_RESULT_OK;
+    }
+    if (choice == 3) {
+        int monster = find_attack_target(state, 1);
+        if (monster > 0) {
+            state->monster_hit_points[monster] -= 10 + state->dungeon_level;
+            push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, monster);
+            if (state->monster_hit_points[monster] < 1) {
+                kill_monster(state, monster);
+                push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, -monster);
+            }
+        } else {
+            push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, 0);
+        }
+        return AK_GAME_RESULT_OK;
+    }
+
+    switch (ak_random_int(&state->random, 3.0, 1.0)) {
+        case 1:
+            state->stats[AK_GAME_STAT_STRENGTH] = 3;
+            state->stats[AK_GAME_STAT_DEXTERITY] = 3;
+            state->stats[AK_GAME_STAT_STAMINA] = 3;
+            state->stats[AK_GAME_STAT_WISDOM] = 3;
+            break;
+        case 2:
+            state->stats[AK_GAME_STAT_HIT_POINTS] = (int)((double)state->stats[AK_GAME_STAT_HIT_POINTS] * 2.5);
+            state->stats[AK_GAME_STAT_STRENGTH] = (int)((double)state->stats[AK_GAME_STAT_STRENGTH] * 2.5);
+            state->stats[AK_GAME_STAT_DEXTERITY] = (int)((double)state->stats[AK_GAME_STAT_DEXTERITY] * 2.5);
+            state->stats[AK_GAME_STAT_STAMINA] = (int)((double)state->stats[AK_GAME_STAT_STAMINA] * 2.5);
+            state->stats[AK_GAME_STAT_WISDOM] = (int)((double)state->stats[AK_GAME_STAT_WISDOM] * 2.5);
+            break;
+        default:
+            state->stats[AK_GAME_STAT_HIT_POINTS] /= 2;
+            if (state->stats[AK_GAME_STAT_HIT_POINTS] <= 0) {
+                state->mode = AK_GAME_MODE_DEATH;
+                state->location = AK_GAME_LOCATION_DEATH;
+            }
+            break;
+    }
+    push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, choice);
+    return AK_GAME_RESULT_OK;
+}
+
+static void apply_quest_acknowledgement(AkGameState *state, AkGameCommandResult *result, AkGameCommandType command) {
+    int i;
+
+    if (state->quest_target == 0) {
+        state->quest_target = state->stats[AK_GAME_STAT_WISDOM] / 3;
+        if (state->quest_target < 1) {
+            state->quest_target = 1;
+        }
+        if (state->quest_target > AK_GAME_MONSTER_COUNT) {
+            state->quest_target = AK_GAME_MONSTER_COUNT;
+        }
+    } else if (state->quest_target < 0) {
+        if (-state->quest_target >= AK_GAME_MONSTER_COUNT) {
+            set_mode(state, result, AK_GAME_MODE_VICTORY, command);
+            state->quest_target = 0;
+        } else {
+            state->quest_target = -state->quest_target + 1;
+        }
+    }
+
+    for (i = 0; i < AK_GAME_STAT_COUNT; i++) {
+        state->stats[i]++;
+    }
+    push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, state->quest_target);
 }
 
 void ak_game_init(AkGameState *state) {
@@ -725,8 +986,8 @@ AkGameResultCode ak_game_apply_command(
         if (tile == AK_GAME_TILE_CASTLE) {
             set_mode(state, result, AK_GAME_MODE_QUEST, type);
             set_location(state, result, AK_GAME_LOCATION_CASTLE, type);
-            push_event(result, AK_GAME_EVENT_RULE_UNIMPLEMENTED, state, type, tile);
-            return finish(result, AK_GAME_RESULT_UNSUPPORTED_RULE);
+            push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, tile);
+            return finish(result, AK_GAME_RESULT_OK);
         }
     }
 
@@ -790,13 +1051,19 @@ AkGameResultCode ak_game_apply_command(
             push_event(result, AK_GAME_EVENT_ERROR, state, type, state->mode);
             return finish(result, AK_GAME_RESULT_INVALID_COMMAND);
         }
-        state->command_count++;
-        push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, command->value);
-        push_event(result, AK_GAME_EVENT_RULE_UNIMPLEMENTED, state, type, command->value);
-        return finish(result, AK_GAME_RESULT_UNSUPPORTED_RULE);
+        if (type == AK_GAME_COMMAND_ATTACK) {
+            return finish(result, apply_attack(state, command, result));
+        }
+        return finish(result, apply_magic(state, command, result));
     }
 
     if (type == AK_GAME_COMMAND_ACKNOWLEDGE) {
+        if (state->mode == AK_GAME_MODE_QUEST) {
+            state->command_count++;
+            push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, 0);
+            apply_quest_acknowledgement(state, result, type);
+            return finish(result, AK_GAME_RESULT_OK);
+        }
         state->command_count++;
         push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, 0);
         return finish(result, AK_GAME_RESULT_OK);
@@ -818,6 +1085,7 @@ const char *ak_game_mode_name(AkGameMode mode) {
         case AK_GAME_MODE_COMBAT: return "combat";
         case AK_GAME_MODE_DEATH: return "death";
         case AK_GAME_MODE_QUEST: return "quest";
+        case AK_GAME_MODE_VICTORY: return "victory";
     }
     return "unknown";
 }
@@ -842,6 +1110,13 @@ const char *ak_game_item_name(AkGameItem item) {
         case AK_GAME_ITEM_SHIELD: return "shield";
         case AK_GAME_ITEM_BOW: return "bow_and_arrows";
         case AK_GAME_ITEM_MAGIC_AMULET: return "magic_amulet";
+    }
+    return "unknown";
+}
+
+const char *ak_game_monster_name(int monster) {
+    if (monster >= 1 && monster <= AK_GAME_MONSTER_COUNT) {
+        return AK_GAME_MONSTER_NAMES[monster];
     }
     return "unknown";
 }

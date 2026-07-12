@@ -27,6 +27,22 @@ static AkGameCommand item_command(AkGameItem item) {
     return command;
 }
 
+static AkGameCommand attack_command(AkGameItem item) {
+    AkGameCommand command;
+    memset(&command, 0, sizeof(command));
+    command.type = AK_GAME_COMMAND_ATTACK;
+    command.item = item;
+    return command;
+}
+
+static AkGameCommand magic_command(int choice) {
+    AkGameCommand command;
+    memset(&command, 0, sizeof(command));
+    command.type = AK_GAME_COMMAND_CAST_MAGIC;
+    command.value = choice;
+    return command;
+}
+
 static void fill_overworld(AkGameState *state, AkGameTile tile) {
     int x;
     int y;
@@ -145,7 +161,7 @@ static void test_invalid_commands_do_not_advance_state(void) {
     assert(state.command_count == 0);
 }
 
-static void test_remaining_rule_placeholders_accept_known_commands_in_valid_modes(void) {
+static void test_combat_commands_accept_known_commands_in_valid_modes(void) {
     AkGameState state;
     AkGameCommandResult result;
     AkGameCommand command;
@@ -165,8 +181,17 @@ static void test_remaining_rule_placeholders_accept_known_commands_in_valid_mode
 
     state.mode = AK_GAME_MODE_DUNGEON;
     state.location = AK_GAME_LOCATION_DUNGEON;
-    command = command_with_value(AK_GAME_COMMAND_ATTACK, AK_GAME_ITEM_RAPIER);
-    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_UNSUPPORTED_RULE);
+    state.facing = AK_GAME_DIRECTION_EAST;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    state.stats[AK_GAME_STAT_DEXTERITY] = 0;
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.monster_active[1] = 1;
+    state.monster_x[1] = 6;
+    state.monster_y[1] = 5;
+    state.monster_hit_points[1] = 10;
+    command = attack_command(AK_GAME_ITEM_AXE);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
     assert(state.command_count == 2);
     assert(result.events[0].command == AK_GAME_COMMAND_ATTACK);
 
@@ -320,7 +345,7 @@ static void test_overworld_entry_rules(void) {
     fill_overworld(&state, AK_GAME_TILE_OPEN);
     state.overworld[10][10] = AK_GAME_TILE_CASTLE;
 
-    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_UNSUPPORTED_RULE);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
     assert(state.mode == AK_GAME_MODE_QUEST);
     assert(state.location == AK_GAME_LOCATION_CASTLE);
 }
@@ -587,6 +612,143 @@ static void test_dungeon_monster_turn_movement_and_attack(void) {
     assert(state.stats[AK_GAME_STAT_HIT_POINTS] < 50);
 }
 
+static void test_dungeon_monster_special_theft(void) {
+    AkGameState state;
+    AkGameCommandResult result;
+    AkGameCommand command;
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.dungeon_level = 1;
+    state.level_of_play = 1;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    state.inventory[AK_GAME_ITEM_FOOD] = 11;
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.monster_active[7] = 1;
+    state.monster_x[7] = 6;
+    state.monster_y[7] = 5;
+    state.monster_hit_points[7] = 50;
+
+    command = command_with_value(AK_GAME_COMMAND_PASS, 0);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.inventory[AK_GAME_ITEM_FOOD] == 5);
+}
+
+static void test_player_attack_miss_hit_and_kill(void) {
+    AkGameState state;
+    AkGameCommandResult result;
+    AkGameCommand command;
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.player_class = AK_GAME_CLASS_FIGHTER;
+    state.facing = AK_GAME_DIRECTION_EAST;
+    state.dungeon_level = 1;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    state.stats[AK_GAME_STAT_DEXTERITY] = 0;
+    state.stats[AK_GAME_STAT_STRENGTH] = 50;
+    state.inventory[AK_GAME_ITEM_RAPIER] = 1;
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.monster_active[1] = 1;
+    state.monster_x[1] = 6;
+    state.monster_y[1] = 5;
+    state.monster_hit_points[1] = 100;
+
+    command = attack_command(AK_GAME_ITEM_RAPIER);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_hit_points[1] == 100);
+
+    state.stats[AK_GAME_STAT_DEXTERITY] = 100;
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_hit_points[1] < 100);
+
+    state.quest_target = 1;
+    state.monster_hit_points[1] = 1;
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_active[1] == 0);
+    assert(state.stats[AK_GAME_STAT_GOLD] >= 2);
+    assert(state.quest_target == -1);
+}
+
+static void test_magic_amulet_ladders_attack_and_backfire(void) {
+    AkGameState state;
+    AkGameCommandResult result;
+    AkGameCommand command;
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.player_class = AK_GAME_CLASS_MAGE;
+    state.facing = AK_GAME_DIRECTION_EAST;
+    state.dungeon_level = 2;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    state.inventory[AK_GAME_ITEM_MAGIC_AMULET] = 4;
+    state.stats[AK_GAME_STAT_HIT_POINTS] = 40;
+    state.stats[AK_GAME_STAT_STRENGTH] = 12;
+    state.stats[AK_GAME_STAT_DEXTERITY] = 12;
+    state.stats[AK_GAME_STAT_STAMINA] = 12;
+    state.stats[AK_GAME_STAT_WISDOM] = 12;
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+
+    command = magic_command(1);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.dungeon[5][5] == AK_GAME_DUNGEON_LADDER_UP);
+
+    command = magic_command(2);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.dungeon[5][5] == AK_GAME_DUNGEON_LADDER_DOWN);
+
+    state.monster_active[3] = 1;
+    state.monster_x[3] = 7;
+    state.monster_y[3] = 5;
+    state.monster_hit_points[3] = 3;
+    state.quest_target = 3;
+    command = magic_command(3);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_active[3] == 0);
+    assert(state.quest_target == -3);
+
+    command = magic_command(4);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.stats[AK_GAME_STAT_HIT_POINTS] != 40 ||
+        state.stats[AK_GAME_STAT_STRENGTH] != 12 ||
+        state.stats[AK_GAME_STAT_DEXTERITY] != 12 ||
+        state.stats[AK_GAME_STAT_STAMINA] != 12 ||
+        state.stats[AK_GAME_STAT_WISDOM] != 12);
+}
+
+static void test_lord_british_quest_progression_and_victory(void) {
+    AkGameState state;
+    AkGameCommandResult result;
+    AkGameCommand command;
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_QUEST;
+    state.location = AK_GAME_LOCATION_CASTLE;
+    state.stats[AK_GAME_STAT_WISDOM] = 9;
+    state.stats[AK_GAME_STAT_HIT_POINTS] = 20;
+
+    command = command_with_value(AK_GAME_COMMAND_ACKNOWLEDGE, 0);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.quest_target == 3);
+    assert(state.stats[AK_GAME_STAT_WISDOM] == 10);
+    assert(state.stats[AK_GAME_STAT_HIT_POINTS] == 21);
+
+    state.quest_target = -3;
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.quest_target == 4);
+
+    state.quest_target = -10;
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.mode == AK_GAME_MODE_VICTORY);
+    assert(state.quest_target == 0);
+}
+
 static void test_store_purchase_rules(void) {
     AkGameState state;
     AkGameCommandResult result;
@@ -674,8 +836,10 @@ static void test_reset_restores_initial_state(void) {
 
 static void test_names_are_stable(void) {
     assert(strcmp(ak_game_mode_name(AK_GAME_MODE_OVERWORLD), "overworld") == 0);
+    assert(strcmp(ak_game_mode_name(AK_GAME_MODE_VICTORY), "victory") == 0);
     assert(strcmp(ak_game_location_name(AK_GAME_LOCATION_DUNGEON), "dungeon") == 0);
     assert(strcmp(ak_game_item_name(AK_GAME_ITEM_MAGIC_AMULET), "magic_amulet") == 0);
+    assert(strcmp(ak_game_monster_name(10), "balrog") == 0);
     assert(strcmp(ak_game_tile_name(AK_GAME_TILE_CASTLE), "castle") == 0);
     assert(strcmp(ak_game_dungeon_tile_name(AK_GAME_DUNGEON_CHEST), "chest") == 0);
 }
@@ -684,7 +848,7 @@ int main(void) {
     test_initial_state_is_deterministic();
     test_startup_command_flow();
     test_invalid_commands_do_not_advance_state();
-    test_remaining_rule_placeholders_accept_known_commands_in_valid_modes();
+    test_combat_commands_accept_known_commands_in_valid_modes();
     test_exit_from_town_generates_deterministic_overworld();
     test_overworld_movement_all_directions_consumes_food();
     test_overworld_mountain_blocking_still_consumes_food();
@@ -697,6 +861,10 @@ int main(void) {
     test_dungeon_ladder_transitions();
     test_dungeon_chest_and_trap_encounters();
     test_dungeon_monster_turn_movement_and_attack();
+    test_dungeon_monster_special_theft();
+    test_player_attack_miss_hit_and_kill();
+    test_magic_amulet_ladders_attack_and_backfire();
+    test_lord_british_quest_progression_and_victory();
     test_store_purchase_rules();
     test_mage_store_restrictions();
     test_reset_restores_initial_state();

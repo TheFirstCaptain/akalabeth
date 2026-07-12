@@ -6,7 +6,8 @@ CORE_SRC = ../Core/src
 TESTS = \
 	$(BUILD_DIR)/basic_listing_tests \
 	$(BUILD_DIR)/game_model_tests \
-	$(BUILD_DIR)/random_tests
+	$(BUILD_DIR)/random_tests \
+	$(BUILD_DIR)/render_tests
 
 .PHONY: test clean
 
@@ -24,6 +25,9 @@ $(BUILD_DIR)/game_model_tests: game_model_tests.c $(CORE_SRC)/ak_game.c $(CORE_S
 
 $(BUILD_DIR)/random_tests: random_tests.c $(CORE_SRC)/ak_random.c $(CORE_INCLUDE)/ak_random.h | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -I$(CORE_INCLUDE) random_tests.c $(CORE_SRC)/ak_random.c -o $@
+
+$(BUILD_DIR)/render_tests: render_tests.c $(CORE_SRC)/ak_render.c $(CORE_SRC)/ak_game.c $(CORE_SRC)/ak_random.c $(CORE_INCLUDE)/ak_render.h $(CORE_INCLUDE)/ak_game.h $(CORE_INCLUDE)/ak_random.h | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -I$(CORE_INCLUDE) render_tests.c $(CORE_SRC)/ak_render.c $(CORE_SRC)/ak_game.c $(CORE_SRC)/ak_random.c -lm -o $@
 
 clean:
 	rm -rf $(BUILD_DIR)
