@@ -1,6 +1,7 @@
 import Testing
 import AkalabethMac
 import CAkalabeth
+import Foundation
 
 @Test func startupInputAdvancesToTown() {
     let session = GameSession()
@@ -54,4 +55,42 @@ import CAkalabeth
     #expect(buffer.count > 0)
     #expect(buffer.commands.0.type == AK_RENDER_COMMAND_SET_MODE)
     #expect(buffer.commands.0.mode == AK_RENDER_MODE_TEXT)
+}
+
+@Test func sessionSnapshotRestoresCoreState() throws {
+    let session = GameSession(fixture: .dungeon)
+
+    let restored = try #require(GameSession(snapshot: session.snapshot()))
+
+    #expect(restored.state.mode == AK_GAME_MODE_DUNGEON)
+    #expect(restored.state.location == AK_GAME_LOCATION_DUNGEON)
+    #expect(restored.state.dungeon_x == session.state.dungeon_x)
+    #expect(restored.state.dungeon_y == session.state.dungeon_y)
+    #expect(restored.state.inventory.0 == session.state.inventory.0)
+}
+
+@Test func persistenceStoresSettingsAndSaveData() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("AkalabethPersistenceTests-\(UUID().uuidString)", isDirectory: true)
+    let suiteName = "AkalabethPersistenceTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    let persistence = AkalabethPersistence(applicationSupportDirectory: directory, defaults: defaults)
+    defer {
+        try? FileManager.default.removeItem(at: directory)
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    persistence.saveSettings(AkalabethSettings(colorTreatment: .amber, windowScale: 3))
+    #expect(persistence.loadSettings() == AkalabethSettings(colorTreatment: .amber, windowScale: 3))
+
+    let session = GameSession(fixture: .quest)
+    try persistence.saveSession(session)
+    let resumed = try #require(try persistence.resumeSession())
+
+    #expect(resumed.state.mode == AK_GAME_MODE_QUEST)
+    #expect(resumed.state.quest_target == session.state.quest_target)
+
+    try persistence.deleteSave()
+    #expect(try persistence.resumeSession() == nil)
 }

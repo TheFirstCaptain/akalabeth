@@ -23,15 +23,6 @@ static char *read_file(const char *path) {
     return buffer;
 }
 
-static int file_exists(const char *path) {
-    FILE *file = fopen(path, "rb");
-    if (file == NULL) {
-        return 0;
-    }
-    assert(fclose(file) == 0);
-    return 1;
-}
-
 static void test_working_listing_structure(void) {
     char *source = read_file("../AKLABETH.TXT");
     AkBasicLine line;
@@ -64,30 +55,6 @@ static void test_major_line_ranges_are_present(void) {
     assert(ak_basic_count_lines_in_range(source, 60000, 60250) == 45);
 
     free(source);
-}
-
-static void test_archive_listing_cross_check(void) {
-    char *working_source = read_file("../AKLABETH.TXT");
-    char *archive_source;
-    AkBasicLine working_line;
-    AkBasicLine archive_line;
-
-    if (!file_exists("../AKLABETH-org.TXT")) {
-        fprintf(stderr, "SKIP archive listing cross-check: ../AKLABETH-org.TXT is not present\n");
-        free(working_source);
-        return;
-    }
-
-    archive_source = read_file("../AKLABETH-org.TXT");
-
-    assert(ak_basic_count_lines(archive_source) == ak_basic_count_lines(working_source));
-    assert(ak_basic_find_line(archive_source, 7000, &archive_line));
-    assert(ak_basic_find_line(working_source, 7000, &working_line));
-    assert(ak_basic_line_contains(&archive_line, "HOME"));
-    assert(ak_basic_line_contains(&working_line, "HOME"));
-
-    free(working_source);
-    free(archive_source);
 }
 
 static void test_behavior_map_source_anchors(void) {
@@ -161,7 +128,6 @@ static void test_behavior_map_source_anchors(void) {
 int main(void) {
     test_working_listing_structure();
     test_major_line_ranges_are_present();
-    test_archive_listing_cross_check();
     test_behavior_map_source_anchors();
     return 0;
 }

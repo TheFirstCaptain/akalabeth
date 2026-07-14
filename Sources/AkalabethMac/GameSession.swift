@@ -1,3 +1,4 @@
+import Foundation
 import CAkalabeth
 
 public enum AkalabethFixture: String, Sendable {
@@ -26,8 +27,36 @@ public final class GameSession {
     public init(fixture: AkalabethFixture = .normal) {
         var initial = AkGameState()
         ak_game_init(&initial)
-        state = initial
+        self.state = initial
         applyFixture(fixture)
+    }
+
+    public init(state: AkGameState, inputBuffer: String = "", statusLine: String = "") {
+        self.state = state
+        self.inputBuffer = inputBuffer
+        self.statusLine = statusLine
+    }
+
+    public convenience init?(snapshot: Data, inputBuffer: String = "", statusLine: String = "") {
+        guard snapshot.count == Self.snapshotByteCount else {
+            return nil
+        }
+
+        var restored = AkGameState()
+        _ = withUnsafeMutableBytes(of: &restored) { rawState in
+            snapshot.copyBytes(to: rawState)
+        }
+        self.init(state: restored, inputBuffer: inputBuffer, statusLine: statusLine)
+    }
+
+    public static var snapshotByteCount: Int {
+        MemoryLayout<AkGameState>.size
+    }
+
+    public func snapshot() -> Data {
+        withUnsafeBytes(of: state) { rawState in
+            Data(rawState)
+        }
     }
 
     public func reset(fixture: AkalabethFixture = .normal) {
@@ -95,6 +124,10 @@ public final class GameSession {
         var buffer = AkRenderCommandBuffer()
         ak_render_game(&state, &buffer)
         return buffer
+    }
+
+    public func setStatusLine(_ text: String) {
+        statusLine = text
     }
 
     private func handleCharacter(_ character: Character) -> AkGameResultCode {

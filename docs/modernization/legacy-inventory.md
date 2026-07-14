@@ -5,7 +5,6 @@
 | Path | Role |
 | --- | --- |
 | `AKLABETH.TXT` | Working Applesoft BASIC source listing |
-| `AKLABETH-org.TXT` | Wrapped/archive source listing used for cross-checking |
 | `README.1ST` | Historical description of files, screenshots, monsters, and notes |
 | `RPG.TXT` | Historical essay about the author's RPG background |
 | `udic.txt` | Ultima Dragons archive note |
@@ -49,4 +48,3 @@
 | monster turns | `4000-4999` |
 | death | `6000-6060` |
 | Lord British quests | `7000-7990` |
-

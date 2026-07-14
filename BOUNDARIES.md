@@ -5,7 +5,6 @@ Use this checklist before implementing or reviewing modern core, harness, adapte
 ## Reference Boundary
 
 - `AKLABETH.TXT` remains the working reference listing.
-- `AKLABETH-org.TXT` may be used to cross-check source preservation and archive wrapping.
 - Historical screenshots are visual references, not implementation assets for the portable core.
 
 ## Core Boundary
@@ -31,4 +30,3 @@ make -C harness test
 ```
 
 If a match in `Core/` is intentional, document why it does not violate the portable-core boundary before handoff.
-

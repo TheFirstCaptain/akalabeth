@@ -12,4 +12,4 @@
 | F-008 | Implemented | Combat, magic, death, and quest progression |
 | F-009 | Implemented | Render command contract for Apple II-style output |
 | F-010 | Implemented | Native macOS Apple silicon app shell |
-| F-011 | Planned | Mac persistence, settings, and distribution package |
+| F-011 | Implemented | Mac persistence, settings, and distribution package |

@@ -10,7 +10,7 @@ make -C harness test
 
 ## Current Scope
 
-- `basic_listing_tests.c` characterizes structural facts about `AKLABETH.TXT` and `AKLABETH-org.TXT`: parsed logical line counts, important line numbers, key data tables, and major line ranges.
+- `basic_listing_tests.c` characterizes structural facts about `AKLABETH.TXT`: parsed logical line counts, important line numbers, key data tables, and major line ranges.
 - `game_model_tests.c` validates the portable game state and command model before detailed Applesoft rules are extracted.
 - `random_tests.c` validates the portable `RND` adapter contract used by future generated-map, dungeon, combat, and loot fixtures.
 

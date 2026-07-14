@@ -38,8 +38,7 @@ This map records the source-backed behavior boundaries that should be characteri
 
 ## Open Questions
 
-- Several source identifiers appear inconsistent or mistyped in the listing, including `TER%` versus `TE%`, `PE%` versus `PER%`, `LEF`/`RIG`, `DNG` versus `DNG%`, `DI` versus `DIS`, `IN` versus `INOUT`, and `INO` versus `INOUT`. Treat these as listing ambiguities until characterized against the archive listing or an execution reference.
+- Several source identifiers appear inconsistent or mistyped in the listing, including `TER%` versus `TE%`, `PE%` versus `PER%`, `LEF`/`RIG`, `DNG` versus `DNG%`, `DI` versus `DIS`, `IN` versus `INOUT`, and `INO` versus `INOUT`. Treat these as listing ambiguities until characterized against an execution reference.
 - Exact Applesoft numeric behavior is required before seeded fixtures can assert full generated maps, dungeon layouts, or combat results.
 - `CALL 62450`, `CALL -868`, `POKE 33/34/35`, `PR#`, `IN#`, and keyboard `PEEK` behavior must remain adapter concerns.
 - `README.1ST` describes no save system, so persistence belongs to a later Mac-specific feature rather than historical behavior preservation.
-

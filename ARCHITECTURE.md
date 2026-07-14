@@ -5,7 +5,6 @@ This document records the observed Akalabeth architecture and the target moderni
 ## Legacy Source
 
 - `AKLABETH.TXT` is the current working Applesoft BASIC listing.
-- `AKLABETH-org.TXT` appears to be an archive-preserved wrapped version of the listing.
 - The program is organized by BASIC line-number ranges rather than modules.
 - Apple II platform behavior is embedded directly in game flow through graphics, keyboard, screen, memory, and random-number commands.
 
@@ -40,7 +39,7 @@ This document records the observed Akalabeth architecture and the target moderni
 - `Package.swift` defines `CAkalabeth`, `AkalabethMac`, and `AkalabethApp` targets for building a native macOS shell around the portable core.
 - `Sources/AkalabethMac/GameSession.swift` maps Mac-facing input flows to portable core commands without depending on AppKit.
 - `Sources/AkalabethApp/main.swift` owns AppKit window, menu, keyboard event, debug fixture, smoke-test, and render-adapter behavior.
-- `harness/basic_listing_tests.c` characterizes high-value structural facts about `AKLABETH.TXT` and `AKLABETH-org.TXT`.
+- `harness/basic_listing_tests.c` characterizes high-value structural facts about `AKLABETH.TXT`.
 - `harness/game_model_tests.c` validates deterministic game-state initialization and command/result behavior before detailed Applesoft rules are extracted.
 - `harness/random_tests.c` validates the portable random adapter contract and representative source expression shapes.
 - `harness/render_tests.c` validates representative render command streams for startup, town, overworld, dungeon, quest, and victory screens.

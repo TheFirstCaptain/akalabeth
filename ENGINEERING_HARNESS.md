@@ -5,8 +5,8 @@ This document is the operating guide for modernizing this repository. The goal i
 ## Current Reality
 
 - The repository currently contains the Akalabeth Applesoft BASIC listing, historical notes, and GIF screenshots.
-- `AKLABETH.TXT` is the current working source listing. `AKLABETH-org.TXT` appears to preserve a wrapped/archive form of the same listing.
-- There is no runnable modern app shell yet.
+- `AKLABETH.TXT` is the current working source listing.
+- There is a runnable native macOS AppKit shell built through SwiftPM.
 - There is no full BASIC interpreter harness yet.
 - The listing uses Apple II-specific graphics, keyboard, memory, and screen commands such as `HGR`, `HPLOT`, `PEEK`, `POKE`, `CALL`, `VTAB`, and `HTAB`.
 
@@ -22,7 +22,7 @@ This document is the operating guide for modernizing this repository. The goal i
 
 ## Working Boundaries
 
-- `AKLABETH.TXT` and `AKLABETH-org.TXT` are historical source/reference files. Avoid formatting churn or direct edits unless the change is explicitly about source preservation.
+- `AKLABETH.TXT` is the historical source/reference listing. Avoid formatting churn or direct edits unless the change is explicitly about source preservation.
 - GIF files, `README.1ST`, `RPG.TXT`, and `udic.txt` are historical assets and notes. Modify them only for a documented archival reason.
 - `Core/` is for portable extracted behavior and source-inspection helpers.
 - `harness/` is for command-line characterization tests that run on a modern compiler.
@@ -76,4 +76,3 @@ As behavior is extracted from the BASIC listing, add focused harness tests befor
 - Validation has passed, or failures and skipped checks are explicitly recorded.
 - Historical source and assets are not changed without a documented reason.
 - New assumptions or durable decisions are captured in project documentation.
-

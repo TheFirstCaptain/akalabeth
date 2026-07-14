@@ -14,7 +14,7 @@ Add a focused test whenever behavior is extracted from the BASIC listing.
 
 - Verify important line numbers exist before extracting behavior.
 - Verify line ranges contain expected commands, labels, and data tables.
-- Cross-check `AKLABETH.TXT` against `AKLABETH-org.TXT` when source preservation is relevant.
+- Cross-check important `AKLABETH.TXT` line numbers and contents before changing source-preservation behavior.
 
 ## Behavior Characterization
 
@@ -31,4 +31,3 @@ For rendering, input, and gameplay flows, include:
 - User actions.
 - Expected observations.
 - Known residual risk.
-
