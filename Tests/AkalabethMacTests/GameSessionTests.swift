@@ -45,10 +45,12 @@ import Foundation
 
     #expect(session.handle(.right) == AK_GAME_RESULT_OK)
     #expect(session.state.facing != facing)
+    #expect(session.lastFeedback == .movement)
     #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
     #expect(session.prompt == .attackWeapon)
     #expect(session.handle(.character("R")) == AK_GAME_RESULT_OK)
     #expect(session.prompt == .none)
+    #expect(session.lastFeedback == .combat)
 }
 
 @Test func axeAttackAsksForThrowOrSwing() {
@@ -111,6 +113,32 @@ import Foundation
     #expect(restored.state.inventory.0 == session.state.inventory.0)
 }
 
+@Test func sessionFeedbackMapsPurchasesBlocksDeathAndVictory() {
+    let town = GameSession(fixture: .town)
+    #expect(town.handle(.character("F")) == AK_GAME_RESULT_OK)
+    #expect(town.lastFeedback == .purchase)
+
+    var blockedState = GameSession(fixture: .dungeon).state
+    blockedState.facing = AK_GAME_DIRECTION_EAST
+    blockedState.dungeon.6.5 = Int32(AK_GAME_DUNGEON_WALL.rawValue)
+    let blocked = GameSession(state: blockedState)
+    #expect(blocked.handle(.character("F")) == AK_GAME_RESULT_OK)
+    #expect(blocked.lastFeedback == .blocked)
+
+    var deathState = GameSession(fixture: .overworld).state
+    deathState.inventory.0 = 0
+    deathState.stats.0 = 1
+    let death = GameSession(state: deathState)
+    #expect(death.handle(.character("P")) == AK_GAME_RESULT_OK)
+    #expect(death.lastFeedback == .death)
+
+    var victoryState = GameSession(fixture: .quest).state
+    victoryState.quest_target = -10
+    let victory = GameSession(state: victoryState)
+    #expect(victory.handle(.enter) == AK_GAME_RESULT_OK)
+    #expect(victory.lastFeedback == .victory)
+}
+
 @Test func persistenceStoresSettingsAndSaveData() throws {
     let directory = FileManager.default.temporaryDirectory
         .appendingPathComponent("AkalabethPersistenceTests-\(UUID().uuidString)", isDirectory: true)
@@ -128,14 +156,16 @@ import Foundation
         windowScale: 3,
         integerScaling: false,
         highContrast: true,
-        scanlines: true
+        scanlines: true,
+        audioEnabled: true
     ))
     #expect(persistence.loadSettings() == AkalabethSettings(
         colorTreatment: .amber,
         windowScale: 3,
         integerScaling: false,
         highContrast: true,
-        scanlines: true
+        scanlines: true,
+        audioEnabled: true
     ))
 
     let session = GameSession(fixture: .quest)

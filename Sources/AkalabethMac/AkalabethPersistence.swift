@@ -11,19 +11,22 @@ public struct AkalabethSettings: Equatable, Sendable {
     public var integerScaling: Bool
     public var highContrast: Bool
     public var scanlines: Bool
+    public var audioEnabled: Bool
 
     public init(
         colorTreatment: AkalabethColorTreatment = .green,
         windowScale: Int = 2,
         integerScaling: Bool = true,
         highContrast: Bool = false,
-        scanlines: Bool = false
+        scanlines: Bool = false,
+        audioEnabled: Bool = false
     ) {
         self.colorTreatment = colorTreatment
         self.windowScale = max(1, min(windowScale, 3))
         self.integerScaling = integerScaling
         self.highContrast = highContrast
         self.scanlines = scanlines
+        self.audioEnabled = audioEnabled
     }
 }
 
@@ -59,12 +62,14 @@ public final class AkalabethPersistence {
         let integerScaling = defaults.object(forKey: Keys.integerScaling) == nil ? true : defaults.bool(forKey: Keys.integerScaling)
         let highContrast = defaults.bool(forKey: Keys.highContrast)
         let scanlines = defaults.bool(forKey: Keys.scanlines)
+        let audioEnabled = defaults.bool(forKey: Keys.audioEnabled)
         return AkalabethSettings(
             colorTreatment: color,
             windowScale: scale,
             integerScaling: integerScaling,
             highContrast: highContrast,
-            scanlines: scanlines
+            scanlines: scanlines,
+            audioEnabled: audioEnabled
         )
     }
 
@@ -74,6 +79,7 @@ public final class AkalabethPersistence {
         defaults.set(settings.integerScaling, forKey: Keys.integerScaling)
         defaults.set(settings.highContrast, forKey: Keys.highContrast)
         defaults.set(settings.scanlines, forKey: Keys.scanlines)
+        defaults.set(settings.audioEnabled, forKey: Keys.audioEnabled)
     }
 
     public func saveSession(_ session: GameSession) throws {
@@ -112,5 +118,6 @@ public final class AkalabethPersistence {
         static let integerScaling = "integerScaling"
         static let highContrast = "highContrast"
         static let scanlines = "scanlines"
+        static let audioEnabled = "audioEnabled"
     }
 }

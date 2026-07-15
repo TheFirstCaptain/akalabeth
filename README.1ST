@@ -1,3 +1,113 @@
+# Akalabeth Modern Mac Port
+
+This repository contains a modernization of Akalabeth, Richard Garriott's pre-Ultima dungeon crawler, built around the original Applesoft BASIC listing in `AKLABETH.TXT`.
+
+The project keeps the historical game flow and rules visible while adding a native macOS shell, a portable C game core, Swift tests, deterministic compatibility fixtures, save/resume support, and display options. The original README text is preserved below under "Original README".
+
+## Requirements
+
+- macOS 13 or newer
+- Swift 6 toolchain or current Xcode command line tools
+- Apple silicon is the primary target for the packaged app
+
+## Run Locally
+
+From the repository root:
+
+```bash
+swift build
+.build/arm64-apple-macosx/debug/AkalabethApp
+```
+
+Useful development launches:
+
+```bash
+.build/arm64-apple-macosx/debug/AkalabethApp --smoke-test
+.build/arm64-apple-macosx/debug/AkalabethApp --fixture=town
+.build/arm64-apple-macosx/debug/AkalabethApp --fixture=overworld
+.build/arm64-apple-macosx/debug/AkalabethApp --fixture=dungeon
+.build/arm64-apple-macosx/debug/AkalabethApp --fixture=quest
+```
+
+To build a release `.app` bundle:
+
+```bash
+Scripts/package_macos_app.sh
+.build/release/Akalabeth.app/Contents/MacOS/Akalabeth
+```
+
+## Validation
+
+```bash
+swift test
+make -C harness test
+```
+
+## How To Play
+
+### Startup
+
+1. Enter a lucky number and press Return. This seeds the world and dungeon layout.
+2. Enter a level of play and press Return.
+3. At the character review, press `Y` to accept or `N` to reroll.
+4. Choose `F` for fighter or `M` for mage.
+
+### Outside
+
+- Arrow keys move north, east, south, and west.
+- `E` enters the current town, dungeon, or castle tile.
+- `P` or Space passes a turn.
+- Food is consumed as you travel. Running out of food is fatal.
+
+### Town
+
+The town screen is the store and status screen.
+
+- `F` buys food.
+- `R` buys a rapier.
+- `A` buys an axe.
+- `S` buys a shield.
+- `B` buys a bow.
+- `M` buys a magic amulet.
+- `Q` leaves town and returns to the overworld.
+
+### Dungeon
+
+- Up arrow or `F` moves forward.
+- Left and Right arrows turn.
+- `P` or Space passes a turn.
+- `E` enters a ladder when standing on it.
+- `A` opens the attack prompt.
+- At the attack prompt, choose `R`, `A`, `S`, `B`, or `M`.
+- Mages can choose magic effects with `1`, `2`, `3`, or `4`; fighters can use amulets but do not control the effect.
+
+### Castle And Quest
+
+- Enter Lord British's castle with `E`.
+- Press Return through quest prompts.
+- Complete assigned monster quests and return to the castle for the next quest.
+
+### Modern Mac Conveniences
+
+- Game > Save Game writes a modern save file.
+- Game > Resume Saved Game reloads that save.
+- Game > New Game clears the save and starts fresh.
+- Game > Reset restarts the current launch fixture.
+- Settings includes green/amber display, original scale, integer scaling, high contrast, scanline treatment, and optional audio feedback.
+- Help > Akalabeth Help summarizes controls and compatibility notes inside the app.
+
+## Project Layout
+
+- `AKLABETH.TXT`: original Applesoft BASIC listing.
+- `Core/`: portable C game rules, RNG adapter, and render command model.
+- `Sources/AkalabethMac/`: Swift session and persistence adapters.
+- `Sources/AkalabethApp/`: native AppKit shell.
+- `Tests/`: Swift package tests.
+- `harness/`: C characterization and compatibility tests.
+- `docs/features/`: feature tracker and implementation notes.
+
+## Original README
+
 AkalaBeth
 =========
 

@@ -29,11 +29,22 @@ public enum AkalabethPrompt: Equatable, Sendable {
     case acknowledgement
 }
 
+public enum AkalabethFeedback: Equatable, Sendable {
+    case none
+    case movement
+    case blocked
+    case combat
+    case purchase
+    case death
+    case victory
+}
+
 public final class GameSession {
     public private(set) var state: AkGameState
     public private(set) var inputBuffer = ""
     public private(set) var statusLine = ""
     public private(set) var prompt: AkalabethPrompt = .none
+    public private(set) var lastFeedback: AkalabethFeedback = .none
     private var pendingAttackItem: AkGameItem = AK_GAME_ITEM_FOOD
 
     public init(fixture: AkalabethFixture = .normal) {
@@ -77,6 +88,7 @@ public final class GameSession {
         inputBuffer = ""
         statusLine = ""
         prompt = .none
+        lastFeedback = .none
         pendingAttackItem = AK_GAME_ITEM_FOOD
         applyFixture(fixture)
     }
@@ -106,7 +118,7 @@ public final class GameSession {
     @discardableResult
     public func applySimpleCommand(_ type: AkGameCommandType) -> AkGameResultCode {
         var command = AkGameCommand(type: type, value: 0, item: AK_GAME_ITEM_FOOD, player_class: AK_GAME_CLASS_NONE)
-        let code = ak_game_apply_command(&state, &command, nil)
+        let code = applyCoreCommand(&command)
         statusLine = status(for: code)
         prompt = promptAfterApplying(command: type, code: code)
         return code
@@ -115,7 +127,7 @@ public final class GameSession {
     @discardableResult
     public func buy(_ item: AkGameItem) -> AkGameResultCode {
         var command = AkGameCommand(type: AK_GAME_COMMAND_BUY_ITEM, value: 0, item: item, player_class: AK_GAME_CLASS_NONE)
-        let code = ak_game_apply_command(&state, &command, nil)
+        let code = applyCoreCommand(&command)
         prompt = .none
         statusLine = status(for: code)
         return code
@@ -124,7 +136,7 @@ public final class GameSession {
     @discardableResult
     public func attack(with item: AkGameItem) -> AkGameResultCode {
         var command = AkGameCommand(type: AK_GAME_COMMAND_ATTACK, value: 0, item: item, player_class: AK_GAME_CLASS_NONE)
-        let code = ak_game_apply_command(&state, &command, nil)
+        let code = applyCoreCommand(&command)
         prompt = .none
         statusLine = status(for: code)
         return code
@@ -133,7 +145,7 @@ public final class GameSession {
     @discardableResult
     public func castMagic(choice: Int32) -> AkGameResultCode {
         var command = AkGameCommand(type: AK_GAME_COMMAND_CAST_MAGIC, value: choice, item: AK_GAME_ITEM_MAGIC_AMULET, player_class: AK_GAME_CLASS_NONE)
-        let code = ak_game_apply_command(&state, &command, nil)
+        let code = applyCoreCommand(&command)
         prompt = .none
         statusLine = status(for: code)
         return code
@@ -257,7 +269,7 @@ public final class GameSession {
         inputBuffer = ""
         let type = state.mode == AK_GAME_MODE_STARTUP_LUCKY_NUMBER ? AK_GAME_COMMAND_SET_LUCKY_NUMBER : AK_GAME_COMMAND_SET_LEVEL
         var command = AkGameCommand(type: type, value: value, item: AK_GAME_ITEM_FOOD, player_class: AK_GAME_CLASS_NONE)
-        let code = ak_game_apply_command(&state, &command, nil)
+        let code = applyCoreCommand(&command)
         statusLine = status(for: code)
         prompt = promptAfterApplying(command: type, code: code)
         return code
@@ -269,7 +281,7 @@ public final class GameSession {
 
     private func selectClass(_ playerClass: AkGameClass) -> AkGameResultCode {
         var command = AkGameCommand(type: AK_GAME_COMMAND_SELECT_CLASS, value: 0, item: AK_GAME_ITEM_FOOD, player_class: playerClass)
-        let code = ak_game_apply_command(&state, &command, nil)
+        let code = applyCoreCommand(&command)
         statusLine = status(for: code)
         prompt = promptAfterApplying(command: AK_GAME_COMMAND_SELECT_CLASS, code: code)
         return code
@@ -413,6 +425,62 @@ public final class GameSession {
             state.location = AK_GAME_LOCATION_CASTLE
             state.quest_target = 1
         }
+    }
+
+    private func applyCoreCommand(_ command: inout AkGameCommand) -> AkGameResultCode {
+        let before = state
+        let code = ak_game_apply_command(&state, &command, nil)
+        lastFeedback = Self.feedback(for: command.type, code: code, before: before, after: state)
+        return code
+    }
+
+    private static func feedback(
+        for command: AkGameCommandType,
+        code: AkGameResultCode,
+        before: AkGameState,
+        after: AkGameState
+    ) -> AkalabethFeedback {
+        if after.mode == AK_GAME_MODE_VICTORY && before.mode != AK_GAME_MODE_VICTORY {
+            return .victory
+        }
+        if after.mode == AK_GAME_MODE_DEATH && before.mode != AK_GAME_MODE_DEATH {
+            return .death
+        }
+        if code == AK_GAME_RESULT_REJECTED || code == AK_GAME_RESULT_INVALID_COMMAND || code == AK_GAME_RESULT_INVALID_ARGUMENT {
+            return .blocked
+        }
+        if command == AK_GAME_COMMAND_BUY_ITEM && code == AK_GAME_RESULT_OK {
+            return .purchase
+        }
+        if (command == AK_GAME_COMMAND_ATTACK || command == AK_GAME_COMMAND_CAST_MAGIC) && code == AK_GAME_RESULT_OK {
+            return .combat
+        }
+        if isMovementCommand(command) && code == AK_GAME_RESULT_OK {
+            if before.location == AK_GAME_LOCATION_OVERWORLD {
+                return before.overworld_x == after.overworld_x && before.overworld_y == after.overworld_y ? .blocked : .movement
+            }
+            if before.location == AK_GAME_LOCATION_DUNGEON {
+                if command == AK_GAME_COMMAND_TURN_LEFT || command == AK_GAME_COMMAND_TURN_RIGHT || command == AK_GAME_COMMAND_TURN_AROUND {
+                    return .movement
+                }
+                return before.dungeon_x == after.dungeon_x && before.dungeon_y == after.dungeon_y ? .blocked : .movement
+            }
+            return .movement
+        }
+        return .none
+    }
+
+    private static func isMovementCommand(_ command: AkGameCommandType) -> Bool {
+        command == AK_GAME_COMMAND_MOVE_NORTH ||
+            command == AK_GAME_COMMAND_MOVE_EAST ||
+            command == AK_GAME_COMMAND_MOVE_SOUTH ||
+            command == AK_GAME_COMMAND_MOVE_WEST ||
+            command == AK_GAME_COMMAND_FORWARD ||
+            command == AK_GAME_COMMAND_TURN_LEFT ||
+            command == AK_GAME_COMMAND_TURN_RIGHT ||
+            command == AK_GAME_COMMAND_TURN_AROUND ||
+            command == AK_GAME_COMMAND_ENTER ||
+            command == AK_GAME_COMMAND_EXIT
     }
 
     private func seedCharacter() {

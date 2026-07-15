@@ -17,6 +17,6 @@
 | F-013 | Implemented | Complete interaction prompts |
 | F-014 | Implemented | Applesoft compatibility pass |
 | F-015 | Implemented | Modern app UX layer |
-| F-016 | Planned | Audio and feedback |
+| F-016 | Implemented | Audio and feedback |
 | F-017 | Planned | Save format hardening |
 | F-018 | Planned | Packaging and release readiness |

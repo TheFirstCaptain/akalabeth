@@ -15,6 +15,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var integerScalingMenuItem: NSMenuItem?
     private var highContrastMenuItem: NSMenuItem?
     private var scanlinesMenuItem: NSMenuItem?
+    private var audioMenuItem: NSMenuItem?
 
     override init() {
         let persistence = AkalabethPersistence()
@@ -114,6 +115,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateSettings(scanlines: !settings.scanlines)
     }
 
+    @objc private func toggleAudio() {
+        updateSettings(audioEnabled: !settings.audioEnabled)
+    }
+
     @objc private func showAbout() {
         let alert = NSAlert()
         alert.messageText = "Akalabeth"
@@ -137,6 +142,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         Town and combat keys: F food, R rapier, A axe or attack prompt, S shield, B bow, M magic amulet, Q leaves town.
 
         Save behavior: the app autosaves after play input. Game > Save Game writes immediately, Resume Saved Game reloads the modern save file, New Game clears it, and Reset restarts the current launch fixture.
+
+        Feedback: Settings > Audio Feedback enables optional Mac sound effects for movement, blocked movement, purchases, combat, death, and victory.
 
         Compatibility: gameplay uses source-shaped rules from the Applesoft listing. The RNG and fixture tests pin the portable compatibility contract; exact Apple II numeric equivalence is not claimed.
         """
@@ -241,6 +248,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         highContrastMenuItem?.target = self
         scanlinesMenuItem = settingsMenu.addItem(withTitle: "Scanline Treatment", action: #selector(toggleScanlines), keyEquivalent: "")
         scanlinesMenuItem?.target = self
+        settingsMenu.addItem(.separator())
+        audioMenuItem = settingsMenu.addItem(withTitle: "Audio Feedback", action: #selector(toggleAudio), keyEquivalent: "")
+        audioMenuItem?.target = self
 
         let helpItem = NSMenuItem()
         mainMenu.addItem(helpItem)
@@ -259,7 +269,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         windowScale: Int? = nil,
         integerScaling: Bool? = nil,
         highContrast: Bool? = nil,
-        scanlines: Bool? = nil
+        scanlines: Bool? = nil,
+        audioEnabled: Bool? = nil
     ) {
         if let colorTreatment {
             settings.colorTreatment = colorTreatment
@@ -278,9 +289,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let scanlines {
             settings.scanlines = scanlines
         }
+        if let audioEnabled {
+            settings.audioEnabled = audioEnabled
+        }
         persistence.saveSettings(settings)
         gameView?.settings = settings
-        session.setStatusLine("Display settings saved")
+        session.setStatusLine(audioEnabled == nil ? "Display settings saved" : "Audio settings saved")
         gameView?.needsDisplay = true
         refreshSettingsMenu()
     }
@@ -295,6 +309,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         integerScalingMenuItem?.state = settings.integerScaling ? .on : .off
         highContrastMenuItem?.state = settings.highContrast ? .on : .off
         scanlinesMenuItem?.state = settings.scanlines ? .on : .off
+        audioMenuItem?.state = settings.audioEnabled ? .on : .off
     }
 
     private func scaleSelector(_ scale: Int) -> Selector {
@@ -377,6 +392,7 @@ final class GameView: NSView {
     override func keyDown(with event: NSEvent) {
         if let input = input(from: event) {
             session.handle(input)
+            playFeedback(session.lastFeedback)
             onSessionChanged?(session)
             needsDisplay = true
             return
@@ -819,6 +835,36 @@ final class GameView: NSView {
                 return nil
             }
             return .character(first)
+        }
+    }
+
+    private func playFeedback(_ feedback: AkalabethFeedback) {
+        guard settings.audioEnabled, feedback != .none else {
+            return
+        }
+
+        let soundName: String
+        switch feedback {
+        case .movement:
+            soundName = "Pop"
+        case .blocked:
+            soundName = "Basso"
+        case .combat:
+            soundName = "Funk"
+        case .purchase:
+            soundName = "Glass"
+        case .death:
+            soundName = "Sosumi"
+        case .victory:
+            soundName = "Hero"
+        case .none:
+            return
+        }
+
+        if let sound = NSSound(named: NSSound.Name(soundName)) {
+            sound.play()
+        } else {
+            NSSound.beep()
         }
     }
 }
