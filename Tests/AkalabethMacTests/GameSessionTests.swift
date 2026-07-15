@@ -45,7 +45,49 @@ import Foundation
 
     #expect(session.handle(.right) == AK_GAME_RESULT_OK)
     #expect(session.state.facing != facing)
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .attackWeapon)
     #expect(session.handle(.character("R")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .none)
+}
+
+@Test func axeAttackAsksForThrowOrSwing() {
+    let session = GameSession(fixture: .dungeon)
+
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .attackWeapon)
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .axeStyle)
+    #expect(session.handle(.character("S")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .none)
+}
+
+@Test func mageMagicAsksForChoice() {
+    var state = GameSession(fixture: .dungeon).state
+    state.player_class = AK_GAME_CLASS_MAGE
+    let session = GameSession(state: state)
+
+    #expect(session.handle(.character("M")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .magicChoice)
+    #expect(session.handle(.character("2")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .none)
+    #expect(session.state.dungeon.5.5 == AK_GAME_DUNGEON_LADDER_DOWN.rawValue)
+}
+
+@Test func firstQuestEntryPromptsForNameAndConsent() {
+    var state = GameSession(fixture: .quest).state
+    state.quest_target = 0
+    let session = GameSession(state: state)
+
+    #expect(session.handle(.enter) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .questName)
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
+    #expect(session.inputBuffer == "A")
+    #expect(session.handle(.enter) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .questConsent)
+    #expect(session.handle(.character("Y")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .none)
+    #expect(session.state.quest_target > 0)
 }
 
 @Test func renderBufferAvailableForAppShell() {

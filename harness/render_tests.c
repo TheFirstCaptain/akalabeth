@@ -63,6 +63,18 @@ static int has_tile(const AkRenderCommandBuffer *buffer, int value, const char *
     return 0;
 }
 
+static int count_commands(const AkRenderCommandBuffer *buffer, AkRenderCommandType type) {
+    size_t i;
+    int count = 0;
+
+    for (i = 0; i < buffer->count; i++) {
+        if (buffer->commands[i].type == type) {
+            count++;
+        }
+    }
+    return count;
+}
+
 static void test_startup_prompts_are_text_mode(void) {
     AkGameState state;
     AkRenderCommandBuffer buffer;
@@ -147,7 +159,7 @@ static void test_dungeon_screen_emits_lines_encounter_and_monster(void) {
     assert(ak_render_game(&state, &buffer));
     assert(buffer.commands[0].mode == AK_RENDER_MODE_HIRES);
     assert(buffer.commands[3].type == AK_RENDER_COMMAND_LINE);
-    assert(has_tile(&buffer, AK_GAME_DUNGEON_CHEST, "chest"));
+    assert(count_commands(&buffer, AK_RENDER_COMMAND_LINE) > 10);
     assert(has_text(&buffer, AK_RENDER_COMMAND_CREATURE, "balrog"));
     assert(has_text(&buffer, AK_RENDER_COMMAND_TEXT, "CHEST"));
 }

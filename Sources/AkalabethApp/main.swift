@@ -365,25 +365,106 @@ final class GameView: NSView {
     }
 
     private func drawCreature(_ command: AkRenderCommand) {
-        let center = point(x: command.x, y: command.y)
-        let rect = rectAround(center: center, width: 60, height: 72)
-        displayColor.setStroke()
+        let monster = Int(command.value)
+        let distance = max(1, Int(command.x2))
+        let c = CGFloat(command.x)
+        let b = monsterBaseY(distance: distance)
+        let d = CGFloat(distance)
         let path = NSBezierPath()
-        path.move(to: NSPoint(x: rect.midX, y: rect.maxY))
-        path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
-        path.line(to: NSPoint(x: rect.midX + 10 * pixelScale, y: rect.midY - 8 * pixelScale))
-        path.line(to: NSPoint(x: rect.midX + 18 * pixelScale, y: rect.minY))
-        path.move(to: NSPoint(x: rect.midX, y: rect.maxY))
-        path.line(to: NSPoint(x: rect.minX, y: rect.midY))
-        path.line(to: NSPoint(x: rect.midX - 10 * pixelScale, y: rect.midY - 8 * pixelScale))
-        path.line(to: NSPoint(x: rect.midX - 18 * pixelScale, y: rect.minY))
-        path.move(to: NSPoint(x: rect.midX - 14 * pixelScale, y: rect.midY + 10 * pixelScale))
-        path.line(to: NSPoint(x: rect.midX + 14 * pixelScale, y: rect.midY + 10 * pixelScale))
-        path.move(to: NSPoint(x: rect.midX, y: rect.maxY - 8 * pixelScale))
-        path.line(to: NSPoint(x: rect.midX, y: rect.minY + 8 * pixelScale))
+
+        func p(_ dx: CGFloat, _ dy: CGFloat) -> NSPoint {
+            point(x: c + dx / d, y: b + dy / d)
+        }
+
+        func stroke(_ points: [(CGFloat, CGFloat)]) {
+            guard let first = points.first else {
+                return
+            }
+            path.move(to: p(first.0, first.1))
+            for point in points.dropFirst() {
+                path.line(to: p(point.0, point.1))
+            }
+        }
+
+        switch monster {
+        case 1:
+            stroke([(-23, 0), (-15, 0), (-15, -15), (-8, -30), (8, -30), (15, -15), (15, 0), (23, 0)])
+            stroke([(0, -26), (0, -65)])
+            stroke([(-23, -56), (-30, -53), (-23, -45), (-23, -53), (-8, -38)])
+            stroke([(-15, -45), (-8, -60), (8, -60), (15, -45)])
+            stroke([(15, -42), (15, -57)])
+            stroke([(-5, -72), (5, -72)])
+        case 2:
+            stroke([(0, -56), (0, -8), (10, 0), (30, 0), (30, -45), (10, -64), (0, -56)])
+            stroke([(0, -56), (-10, -64), (-30, -45), (-30, 0), (-10, 0), (0, -8)])
+            stroke([(-10, -64), (-10, -75), (0, -83), (10, -75), (0, -79), (-10, -75), (0, -60), (10, -75), (10, -64)])
+        case 3:
+            stroke([(5, -30), (0, -25), (-5, -30), (-15, -5), (-10, 0), (10, 0), (15, -5), (20, -5), (10, 0), (15, -5), (5, -30), (10, -40)])
+            stroke([(10, -40), (3.5, -35), (-3.5, -35), (-10, -40), (-5, -30)])
+            stroke([(-5, -33), (-3.5, -30)])
+            stroke([(5, -33), (3.5, -30)])
+            stroke([(-7, -20), (-7, -15)])
+            stroke([(7, -20), (7, -15)])
+        case 4:
+            stroke([(0, 0), (-15, 0), (-8, -8), (-8, -15), (-15, -23), (-15, -15), (-23, -23), (-23, -45), (-15, -53), (-8, -53), (-15, -68), (-8, -75), (0, -75)])
+            stroke([(0, 0), (15, 0), (8, -8), (8, -15), (15, -23), (15, -15), (23, -23), (23, -45), (15, -53), (8, -53), (15, -68), (8, -75), (0, -75)])
+            stroke([(-15, -68), (15, -68)])
+            stroke([(-8, -53), (8, -53)])
+            stroke([(-23, -15), (8, -45)])
+            stroke([(0, -38), (-8, -38), (8, -53), (8, -45), (15, -45), (0, -30), (0, -38)])
+        case 5:
+            stroke([(-10, -15), (-10, -30), (-15, -20), (-15, -15), (-15, 0), (15, 0), (15, -15), (-15, -15)])
+            stroke([(-15, -10), (15, -10)])
+            stroke([(-15, -5), (15, -5)])
+            stroke([(0, -15), (-5, -20), (-5, -35), (5, -35), (5, -20), (10, -15)])
+            stroke([(-5, -20), (5, -20)])
+            stroke([(-10, -40), (0, -45), (10, -40)])
+            stroke([(-15, -30), (0, -40), (15, -30)])
+        case 6:
+            stroke([(-20, -9), (-20, -88), (-10, -83), (10, -83), (20, -88), (20, -9), (-20, -9)])
+            stroke([(-20, -88), (-30, -83), (-30, -78)])
+            stroke([(20, -88), (30, -83), (40, -83)])
+            stroke([(-15, -86), (-20, -83), (-20, -78), (-30, -73), (-30, -68), (-20, -63)])
+            stroke([(-10, -83), (-10, -58), (0, -50)])
+            stroke([(10, -83), (10, -78), (20, -73), (20, -40)])
+            stroke([(0, -83), (0, -73), (10, -68), (10, -63), (0, -58)])
+        case 7:
+            stroke([(5.5, -10), (-4.5, -10), (0, -15), (10, -20), (5.5, -15), (5.5, -10), (7.5, -6), (5.5, -3), (-4.5, -3), (-7.5, -6), (-4.5, -10)])
+            stroke([(2.5, -3), (5.5, 0), (8, 0)])
+            stroke([(-2.5, -3), (-5.5, 0), (-8, 0)])
+            stroke([(3.5, -8), (3.5, -8)])
+            stroke([(-3.5, -8), (-3.5, -8)])
+            stroke([(3.5, -5), (-3.5, -5)])
+        case 8:
+            stroke([(-10, 0), (-10, -10), (10, -10), (10, 0), (-10, 0)])
+            stroke([(-10, -10), (-5, -15), (15, -15), (15, -5), (10, 0)])
+            stroke([(10, -10), (15, -15)])
+        case 9:
+            stroke([(-14, -46), (-12, -37), (-20, -32), (-30, -32), (-22, -24), (-40, -17), (-40, -7), (-38, -5), (-40, -3), (-40, 0), (-36, 0), (-34, -2), (-32, 0), (-28, 0), (-28, -3), (-30, -5), (-28, -7), (-28, -15), (0, -27)])
+            stroke([(14, -46), (12, -37), (20, -32), (30, -32), (22, -24), (40, -17), (40, -7), (38, -5), (40, -3), (40, 0), (36, 0), (34, -2), (32, 0), (28, 0), (28, -3), (30, -5), (28, -7), (28, -15), (0, -27)])
+            stroke([(6, -48), (38, -41), (40, -42), (18, -56), (12, -56), (10, -57), (8, -56), (-8, -56), (-10, -58), (14, -58), (16, -59), (8, -63), (6, -63), (2.5, -70)])
+            stroke([(-2.5, -70), (-6, -63), (-8, -63), (-16, -59), (-14, -58), (-10, -57), (-12, -56), (-18, -56), (-36, -47), (-36, -39), (-28, -41), (-28, -46), (-20, -50), (-18, -50), (-14, -46)])
+        case 10:
+            stroke([(6, -60), (30, -90), (60, -30), (60, -10), (30, -40), (15, -40)])
+            stroke([(-6, -60), (-30, -90), (-60, -30), (-60, -10), (-30, -40), (-15, -40)])
+            stroke([(0, -25), (6, -25), (10, -20), (12, -10), (10, -6), (10, 0), (14, 0), (15, -5), (16, 0), (20, 0), (20, -6), (18, -10), (18, -20), (15, -30), (15, -45), (40, -60), (40, -70)])
+            stroke([(0, -25), (-6, -25), (-10, -20), (-12, -10), (-10, -6), (-10, 0), (-14, 0), (-15, -5), (-16, 0), (-20, 0), (-20, -6), (-18, -10), (-18, -20), (-15, -30), (-15, -45), (-40, -60), (-40, -70)])
+            stroke([(-6, -25), (0, -6), (10, 0), (4.5, -8), (6, -25)])
+            stroke([(-40, -64), (-40, -90), (-52, -80), (-52, -40)])
+            stroke([(40, -86), (38, -92), (42, -92), (40, -86), (40, -50)])
+            stroke([(4.5, -70), (6, -74)])
+            stroke([(-4.5, -70), (-6, -74)])
+            stroke([(0, -64), (0, -60)])
+        default:
+            let center = point(x: command.x, y: command.y)
+            let rect = rectAround(center: center, width: 38, height: 50)
+            path.appendOval(in: rect)
+        }
+
+        displayColor.setStroke()
         path.lineWidth = max(1.0, pixelScale)
         path.stroke()
-        drawHiresText(commandText(command).uppercased(), x: command.x - 30, y: command.y - 44, inverse: true)
+        drawHiresText(commandText(command).uppercased(), x: 108, y: 10, inverse: true)
     }
 
     private func drawText(_ text: String, column: Int, row: Int, inverse: Bool) {
@@ -425,6 +506,23 @@ final class GameView: NSView {
 
     private func point(x: Int32, y: Int32) -> NSPoint {
         NSPoint(x: virtualRect.minX + CGFloat(x) * pixelScale, y: virtualRect.maxY - CGFloat(y) * pixelScale)
+    }
+
+    private func point(x: CGFloat, y: CGFloat) -> NSPoint {
+        NSPoint(x: virtualRect.minX + x * pixelScale, y: virtualRect.maxY - y * pixelScale)
+    }
+
+    private func monsterBaseY(distance: Int) -> CGFloat {
+        79.0 + perspectiveYY(distance)
+    }
+
+    private func perspectiveYY(_ distance: Int) -> CGFloat {
+        if distance <= 0 {
+            return 79.0
+        }
+        let x = min(max(distance, 1), 10) * 2
+        let xx = Int((atan(1.0 / Double(x)) / atan(1.0) * 140.0) + 0.5)
+        return CGFloat(Int(Double(xx) * 4.0 / 7.0))
     }
 
     private func rectAround(center: NSPoint, width: CGFloat, height: CGFloat) -> NSRect {

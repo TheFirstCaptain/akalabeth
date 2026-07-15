@@ -13,8 +13,8 @@
 | F-009 | Implemented | Render command contract for Apple II-style output |
 | F-010 | Implemented | Native macOS Apple silicon app shell |
 | F-011 | Implemented | Mac persistence, settings, and distribution package |
-| F-012 | In Progress | Visual fidelity renderer |
-| F-013 | Planned | Complete interaction prompts |
+| F-012 | Implemented | Visual fidelity renderer |
+| F-013 | Implemented | Complete interaction prompts |
 | F-014 | Planned | Applesoft compatibility pass |
 | F-015 | Planned | Modern app UX layer |
 | F-016 | Planned | Audio and feedback |

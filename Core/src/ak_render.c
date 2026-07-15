@@ -1,5 +1,6 @@
 #include "ak_render.h"
 
+#include <math.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -76,6 +77,14 @@ static void append_line(AkRenderCommandBuffer *buffer, int x, int y, int x2, int
     }
 }
 
+static void append_polyline(AkRenderCommandBuffer *buffer, const int points[][2], int count) {
+    int index;
+
+    for (index = 0; index + 1 < count; index++) {
+        append_line(buffer, points[index][0], points[index][1], points[index + 1][0], points[index + 1][1]);
+    }
+}
+
 static void append_prompt(AkRenderCommandBuffer *buffer, int x, int y, const char *text) {
     AkRenderCommand *command = append_command(buffer, AK_RENDER_COMMAND_PROMPT);
     if (command != NULL) {
@@ -105,11 +114,12 @@ static void append_tile(AkRenderCommandBuffer *buffer, int x, int y, int tile, c
     }
 }
 
-static void append_monster(AkRenderCommandBuffer *buffer, int monster, int x, int y) {
+static void append_monster(AkRenderCommandBuffer *buffer, int monster, int x, int y, int distance) {
     AkRenderCommand *command = append_command(buffer, AK_RENDER_COMMAND_CREATURE);
     if (command != NULL) {
         command->x = x;
         command->y = y;
+        command->x2 = distance;
         command->value = monster;
         copy_text(command->text, ak_game_monster_name(monster));
     }
@@ -235,30 +245,233 @@ static int direction_dy(AkGameDirection direction) {
     return 0;
 }
 
+static int source_tile_for_dungeon_tile(int tile) {
+    if (tile == AK_GAME_DUNGEON_WALL ||
+        tile == AK_GAME_DUNGEON_SECRET_DOOR ||
+        tile == AK_GAME_DUNGEON_HIDDEN_DOOR ||
+        tile == AK_GAME_DUNGEON_CHEST ||
+        tile == AK_GAME_DUNGEON_LADDER_DOWN ||
+        tile == AK_GAME_DUNGEON_LADDER_UP ||
+        tile == AK_GAME_DUNGEON_LADDER_DOWN_ALT) {
+        return tile;
+    }
+    return AK_GAME_DUNGEON_OPEN;
+}
+
+static int blocks_dungeon_view(int source_tile) {
+    return source_tile == AK_GAME_DUNGEON_WALL ||
+        source_tile == AK_GAME_DUNGEON_SECRET_DOOR ||
+        source_tile == AK_GAME_DUNGEON_HIDDEN_DOOR;
+}
+
+static void dungeon_perspective_tables(
+    int per[11][4],
+    int ld[10][6],
+    int cd[11][4],
+    int ft[10][6],
+    int lad[10][4]
+) {
+    int xx[11];
+    int yy[11];
+    int x;
+
+    xx[0] = 139;
+    yy[0] = 79;
+    for (x = 2; x <= 20; x += 2) {
+        int index = x / 2;
+        xx[index] = (int)(((atan(1.0 / x) / atan(1.0)) * 140.0) + 0.5);
+        yy[index] = (int)(xx[index] * 4.0 / 7.0);
+    }
+
+    for (x = 1; x <= 10; x++) {
+        per[x][0] = 139 - xx[x];
+        per[x][1] = 139 + xx[x];
+        per[x][2] = 79 - yy[x];
+        per[x][3] = 79 + yy[x];
+    }
+    per[0][0] = 0;
+    per[0][1] = 279;
+    per[0][2] = 0;
+    per[0][3] = 159;
+
+    for (x = 1; x <= 10; x++) {
+        cd[x][0] = 139 - xx[x] / 3;
+        cd[x][1] = 139 + xx[x] / 3;
+        cd[x][2] = (int)(79 - yy[x] * 0.7);
+        cd[x][3] = 79 + yy[x];
+    }
+
+    for (x = 0; x <= 9; x++) {
+        int w;
+        ld[x][0] = (per[x][0] * 2 + per[x + 1][0]) / 3;
+        ld[x][1] = (per[x][0] + 2 * per[x + 1][0]) / 3;
+        w = ld[x][0] - per[x][0];
+        ld[x][2] = per[x][2] + w * 4 / 7;
+        ld[x][3] = per[x][2] + 2 * w * 4 / 7;
+        ld[x][4] = (per[x][3] * 2 + per[x + 1][3]) / 3;
+        ld[x][5] = (per[x][3] + 2 * per[x + 1][3]) / 3;
+        ld[x][2] = (int)(ld[x][4] - (ld[x][4] - ld[x][2]) * 0.8);
+        ld[x][3] = (int)(ld[x][5] - (ld[x][5] - ld[x][3]) * 0.8);
+        if (ld[x][3] == ld[x][4]) {
+            ld[x][3]--;
+        }
+
+        ft[x][0] = 139 - xx[x] / 3;
+        ft[x][1] = 139 + xx[x] / 3;
+        ft[x][2] = 139 - xx[x + 1] / 3;
+        ft[x][3] = 139 + xx[x + 1] / 3;
+        ft[x][4] = 79 + (yy[x] * 2 + yy[x + 1]) / 3;
+        ft[x][5] = 79 + (yy[x] + 2 * yy[x + 1]) / 3;
+
+        lad[x][0] = (ft[x][0] * 2 + ft[x][1]) / 3;
+        lad[x][1] = (ft[x][0] + 2 * ft[x][1]) / 3;
+        lad[x][3] = ft[x][4];
+        lad[x][2] = 159 - lad[x][3];
+    }
+}
+
+static void append_chest_art(AkRenderCommandBuffer *buffer, int distance, int bottom_y) {
+    int left = 139 - 10 / distance;
+    int right = 139 + 10 / distance;
+    int top = bottom_y - 10 / distance;
+    int peak_left = 139 - 5 / distance;
+    int peak_right = 139 + 15 / distance;
+    int peak_y = bottom_y - 15 / distance;
+    int side_y = bottom_y - 5 / distance;
+    const int box[][2] = {{left, bottom_y}, {left, top}, {right, top}, {right, bottom_y}, {left, bottom_y}};
+    const int lid[][2] = {{left, top}, {peak_left, peak_y}, {peak_right, peak_y}, {peak_right, side_y}, {right, bottom_y}};
+
+    append_polyline(buffer, box, 5);
+    append_polyline(buffer, lid, 5);
+    append_line(buffer, right, top, peak_right, peak_y);
+}
+
+static void append_ladder(AkRenderCommandBuffer *buffer, int lx, int rx, int top, int base) {
+    int y1 = (base * 4 + top) / 5;
+    int y2 = (base * 3 + top * 2) / 5;
+    int y3 = (base * 2 + top * 3) / 5;
+    int y4 = (base + top * 4) / 5;
+
+    append_line(buffer, lx, base, lx, top);
+    append_line(buffer, rx, top, rx, base);
+    append_line(buffer, lx, y1, rx, y1);
+    append_line(buffer, lx, y2, rx, y2);
+    append_line(buffer, lx, y3, rx, y3);
+    append_line(buffer, lx, y4, rx, y4);
+}
+
 static void render_dungeon(const AkGameState *state, AkRenderCommandBuffer *buffer) {
-    int ahead_x = state->dungeon_x + direction_dx(state->facing);
-    int ahead_y = state->dungeon_y + direction_dy(state->facing);
-    int tile = dungeon_tile_at(state, ahead_x, ahead_y);
-    int monster = active_monster_at(state, ahead_x, ahead_y);
+    int per[11][4];
+    int ld[10][6];
+    int cd[11][4];
+    int ft[10][6];
+    int lad[10][4];
+    int forward_x = direction_dx(state->facing);
+    int forward_y = direction_dy(state->facing);
+    int left_x = forward_y;
+    int left_y = -forward_x;
+    int distance;
 
     append_mode(buffer, AK_RENDER_MODE_HIRES);
     append_clear(buffer);
     append_color(buffer, AK_RENDER_COLOR_WHITE);
-    append_line(buffer, 20, 20, 90, 70);
-    append_line(buffer, 260, 20, 190, 70);
-    append_line(buffer, 90, 70, 190, 70);
-    append_line(buffer, 90, 120, 190, 120);
-    append_line(buffer, 20, 170, 90, 120);
-    append_line(buffer, 260, 170, 190, 120);
-    append_tile(buffer, 139, 100, tile, ak_game_dungeon_tile_name((AkGameDungeonTile)tile));
-    if (monster > 0) {
-        append_monster(buffer, monster, 139, 92);
+
+    dungeon_perspective_tables(per, ld, cd, ft, lad);
+
+    for (distance = 0; distance < 10; distance++) {
+        int center_x = state->dungeon_x + forward_x * distance;
+        int center_y = state->dungeon_y + forward_y * distance;
+        int center = source_tile_for_dungeon_tile(dungeon_tile_at(state, center_x, center_y));
+        int left = source_tile_for_dungeon_tile(dungeon_tile_at(state, center_x + left_x, center_y + left_y));
+        int right = source_tile_for_dungeon_tile(dungeon_tile_at(state, center_x - left_x, center_y - left_y));
+        int monster = active_monster_at(state, center_x, center_y);
+        int l1 = per[distance][0];
+        int r1 = per[distance][1];
+        int t1 = per[distance][2];
+        int b1 = per[distance][3];
+        int l2 = per[distance + 1][0];
+        int r2 = per[distance + 1][1];
+        int t2 = per[distance + 1][2];
+        int b2 = per[distance + 1][3];
+
+        if (distance != 0 && blocks_dungeon_view(center)) {
+            const int wall[][2] = {{l1, t1}, {r1, t1}, {r1, b1}, {l1, b1}, {l1, t1}};
+            append_polyline(buffer, wall, 5);
+            if (center == AK_GAME_DUNGEON_HIDDEN_DOOR) {
+                const int door[][2] = {{cd[distance][0], cd[distance][3]}, {cd[distance][0], cd[distance][2]}, {cd[distance][1], cd[distance][2]}, {cd[distance][1], cd[distance][3]}};
+                append_polyline(buffer, door, 4);
+            }
+            if (monster > 0) {
+                append_monster(buffer, monster, 139, 79 + (b1 - 79) / 2, distance);
+            }
+            break;
+        }
+
+        if (blocks_dungeon_view(left)) {
+            append_line(buffer, l1, t1, l2, t2);
+            append_line(buffer, l1, b1, l2, b2);
+        } else {
+            if (distance != 0) {
+                append_line(buffer, l1, t1, l1, b1);
+            }
+            append_line(buffer, l1, t2, l2, t2);
+            append_line(buffer, l2, t2, l2, b2);
+            append_line(buffer, l2, b2, l1, b2);
+        }
+
+        if (left == AK_GAME_DUNGEON_HIDDEN_DOOR) {
+            if (distance > 0) {
+                const int door[][2] = {{ld[distance][0], ld[distance][4]}, {ld[distance][0], ld[distance][2]}, {ld[distance][1], ld[distance][3]}, {ld[distance][1], ld[distance][5]}};
+                append_polyline(buffer, door, 4);
+            } else {
+                const int door[][2] = {{0, ld[distance][2] - 3}, {ld[distance][1], ld[distance][3]}, {ld[distance][1], ld[distance][5]}};
+                append_polyline(buffer, door, 3);
+            }
+        }
+
+        if (blocks_dungeon_view(right)) {
+            append_line(buffer, r1, t1, r2, t2);
+            append_line(buffer, r1, b1, r2, b2);
+        } else {
+            if (distance != 0) {
+                append_line(buffer, r1, t1, r1, b1);
+            }
+            append_line(buffer, r1, t2, r2, t2);
+            append_line(buffer, r2, t2, r2, b2);
+            append_line(buffer, r2, b2, r1, b2);
+        }
+
+        if (right == AK_GAME_DUNGEON_HIDDEN_DOOR) {
+            if (distance > 0) {
+                const int door[][2] = {{279 - ld[distance][0], ld[distance][4]}, {279 - ld[distance][0], ld[distance][2]}, {279 - ld[distance][1], ld[distance][3]}, {279 - ld[distance][1], ld[distance][5]}};
+                append_polyline(buffer, door, 4);
+            } else {
+                const int door[][2] = {{279, ld[distance][2] - 3}, {279 - ld[distance][1], ld[distance][3]}, {279 - ld[distance][1], ld[distance][5]}};
+                append_polyline(buffer, door, 3);
+            }
+        }
+
+        if (center == AK_GAME_DUNGEON_LADDER_DOWN || center == AK_GAME_DUNGEON_LADDER_DOWN_ALT) {
+            const int floor_trap[][2] = {{ft[distance][0], ft[distance][4]}, {ft[distance][2], ft[distance][5]}, {ft[distance][3], ft[distance][5]}, {ft[distance][1], ft[distance][4]}, {ft[distance][0], ft[distance][4]}};
+            append_polyline(buffer, floor_trap, 5);
+            append_ladder(buffer, lad[distance][0], lad[distance][1], lad[distance][2], lad[distance][3]);
+        } else if (center == AK_GAME_DUNGEON_LADDER_UP) {
+            const int ceiling_trap[][2] = {{ft[distance][0], 158 - ft[distance][4]}, {ft[distance][2], 158 - ft[distance][5]}, {ft[distance][3], 158 - ft[distance][5]}, {ft[distance][1], 158 - ft[distance][4]}, {ft[distance][0], 158 - ft[distance][4]}};
+            append_polyline(buffer, ceiling_trap, 5);
+            append_ladder(buffer, lad[distance][0], lad[distance][1], lad[distance][2], lad[distance][3]);
+        } else if (center == AK_GAME_DUNGEON_CHEST && distance > 0) {
+            append_chest_art(buffer, distance, per[distance][3]);
+            append_text(buffer, 116, 10, "CHEST", 1);
+        } else if (center == AK_GAME_DUNGEON_TRAP && distance > 0) {
+            append_text(buffer, 106, 10, "HIDDEN TRAP", 1);
+        }
+
+        if (monster > 0 && distance > 0) {
+            append_monster(buffer, monster, 139, 79 + (b1 - 79) / 2, distance);
+            break;
+        }
     }
-    if (tile == AK_GAME_DUNGEON_CHEST) {
-        append_text(buffer, 116, 10, "CHEST", 1);
-    } else if (tile == AK_GAME_DUNGEON_TRAP) {
-        append_text(buffer, 106, 10, "HIDDEN TRAP", 1);
-    }
+
     append_main_status(state, buffer);
     append_prompt(buffer, 1, 24, "COMMAND?");
 }

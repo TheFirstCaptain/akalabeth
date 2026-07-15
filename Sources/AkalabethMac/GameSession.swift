@@ -19,10 +19,22 @@ public enum AkalabethInput: Equatable, Sendable {
     case left
 }
 
+public enum AkalabethPrompt: Equatable, Sendable {
+    case none
+    case attackWeapon
+    case axeStyle
+    case magicChoice
+    case questName
+    case questConsent
+    case acknowledgement
+}
+
 public final class GameSession {
     public private(set) var state: AkGameState
     public private(set) var inputBuffer = ""
     public private(set) var statusLine = ""
+    public private(set) var prompt: AkalabethPrompt = .none
+    private var pendingAttackItem: AkGameItem = AK_GAME_ITEM_FOOD
 
     public init(fixture: AkalabethFixture = .normal) {
         var initial = AkGameState()
@@ -31,10 +43,11 @@ public final class GameSession {
         applyFixture(fixture)
     }
 
-    public init(state: AkGameState, inputBuffer: String = "", statusLine: String = "") {
+    public init(state: AkGameState, inputBuffer: String = "", statusLine: String = "", prompt: AkalabethPrompt = .none) {
         self.state = state
         self.inputBuffer = inputBuffer
         self.statusLine = statusLine
+        self.prompt = prompt
     }
 
     public convenience init?(snapshot: Data, inputBuffer: String = "", statusLine: String = "") {
@@ -63,6 +76,8 @@ public final class GameSession {
         ak_game_init(&state)
         inputBuffer = ""
         statusLine = ""
+        prompt = .none
+        pendingAttackItem = AK_GAME_ITEM_FOOD
         applyFixture(fixture)
     }
 
@@ -93,6 +108,7 @@ public final class GameSession {
         var command = AkGameCommand(type: type, value: 0, item: AK_GAME_ITEM_FOOD, player_class: AK_GAME_CLASS_NONE)
         let code = ak_game_apply_command(&state, &command, nil)
         statusLine = status(for: code)
+        prompt = promptAfterApplying(command: type, code: code)
         return code
     }
 
@@ -100,6 +116,7 @@ public final class GameSession {
     public func buy(_ item: AkGameItem) -> AkGameResultCode {
         var command = AkGameCommand(type: AK_GAME_COMMAND_BUY_ITEM, value: 0, item: item, player_class: AK_GAME_CLASS_NONE)
         let code = ak_game_apply_command(&state, &command, nil)
+        prompt = .none
         statusLine = status(for: code)
         return code
     }
@@ -108,6 +125,7 @@ public final class GameSession {
     public func attack(with item: AkGameItem) -> AkGameResultCode {
         var command = AkGameCommand(type: AK_GAME_COMMAND_ATTACK, value: 0, item: item, player_class: AK_GAME_CLASS_NONE)
         let code = ak_game_apply_command(&state, &command, nil)
+        prompt = .none
         statusLine = status(for: code)
         return code
     }
@@ -116,6 +134,7 @@ public final class GameSession {
     public func castMagic(choice: Int32) -> AkGameResultCode {
         var command = AkGameCommand(type: AK_GAME_COMMAND_CAST_MAGIC, value: choice, item: AK_GAME_ITEM_MAGIC_AMULET, player_class: AK_GAME_CLASS_NONE)
         let code = ak_game_apply_command(&state, &command, nil)
+        prompt = .none
         statusLine = status(for: code)
         return code
     }
@@ -131,6 +150,10 @@ public final class GameSession {
     }
 
     private func handleCharacter(_ character: Character) -> AkGameResultCode {
+        if prompt != .none {
+            return handlePromptCharacter(character)
+        }
+
         if isNumericPrompt {
             if character.isNumber {
                 inputBuffer.append(character)
@@ -159,7 +182,15 @@ public final class GameSession {
             if state.mode == AK_GAME_MODE_TOWN {
                 return buy(AK_GAME_ITEM_MAGIC_AMULET)
             }
-            return castMagic(choice: 1)
+            if state.mode == AK_GAME_MODE_DUNGEON {
+                if state.player_class == AK_GAME_CLASS_MAGE {
+                    prompt = .magicChoice
+                    statusLine = "1-LADDER-UP 2-LADDER-DN 3-KILL 4-BAD??"
+                    return AK_GAME_RESULT_OK
+                }
+                return castMagic(choice: 1)
+            }
+            return AK_GAME_RESULT_INVALID_COMMAND
         case "R":
             if state.mode == AK_GAME_MODE_TOWN {
                 return buy(AK_GAME_ITEM_RAPIER)
@@ -168,6 +199,11 @@ public final class GameSession {
         case "A":
             if state.mode == AK_GAME_MODE_TOWN {
                 return buy(AK_GAME_ITEM_AXE)
+            }
+            if state.mode == AK_GAME_MODE_DUNGEON {
+                prompt = .attackWeapon
+                statusLine = "WHICH WEAPON"
+                return AK_GAME_RESULT_OK
             }
             return attack(with: AK_GAME_ITEM_AXE)
         case "S":
@@ -195,6 +231,22 @@ public final class GameSession {
     }
 
     private func submitBufferedInput() -> AkGameResultCode {
+        if prompt == .none && state.mode == AK_GAME_MODE_QUEST && state.quest_target == 0 {
+            prompt = .questName
+            statusLine = "WHAT IS THY NAME PEASANT"
+            return AK_GAME_RESULT_OK
+        }
+        if prompt == .questName {
+            inputBuffer = ""
+            prompt = .questConsent
+            statusLine = "DOEST THOU WISH FOR GRAND ADVENTURE?"
+            return AK_GAME_RESULT_OK
+        }
+        if prompt == .acknowledgement {
+            prompt = .none
+            return AK_GAME_RESULT_OK
+        }
+
         if state.mode == AK_GAME_MODE_QUEST || state.mode == AK_GAME_MODE_VICTORY || state.mode == AK_GAME_MODE_DEATH {
             return applySimpleCommand(AK_GAME_COMMAND_ACKNOWLEDGE)
         }
@@ -207,6 +259,7 @@ public final class GameSession {
         var command = AkGameCommand(type: type, value: value, item: AK_GAME_ITEM_FOOD, player_class: AK_GAME_CLASS_NONE)
         let code = ak_game_apply_command(&state, &command, nil)
         statusLine = status(for: code)
+        prompt = promptAfterApplying(command: type, code: code)
         return code
     }
 
@@ -218,7 +271,104 @@ public final class GameSession {
         var command = AkGameCommand(type: AK_GAME_COMMAND_SELECT_CLASS, value: 0, item: AK_GAME_ITEM_FOOD, player_class: playerClass)
         let code = ak_game_apply_command(&state, &command, nil)
         statusLine = status(for: code)
+        prompt = promptAfterApplying(command: AK_GAME_COMMAND_SELECT_CLASS, code: code)
         return code
+    }
+
+    private func handlePromptCharacter(_ character: Character) -> AkGameResultCode {
+        switch prompt {
+        case .attackWeapon:
+            return handleAttackWeapon(character)
+        case .axeStyle:
+            return handleAxeStyle(character)
+        case .magicChoice:
+            if let choice = Int32(String(character)), choice >= 1 && choice <= 4 {
+                return castMagic(choice: choice)
+            }
+            statusLine = "CHOICE 1-4"
+            return AK_GAME_RESULT_INVALID_COMMAND
+        case .questName:
+            if character.isLetter || character.isNumber || character == " " {
+                inputBuffer.append(character)
+                statusLine = inputBuffer
+                return AK_GAME_RESULT_OK
+            }
+            statusLine = "WHAT IS THY NAME PEASANT"
+            return AK_GAME_RESULT_INVALID_COMMAND
+        case .questConsent:
+            if character == "Y" {
+                prompt = .none
+                inputBuffer = ""
+                return applySimpleCommand(AK_GAME_COMMAND_ACKNOWLEDGE)
+            }
+            prompt = .acknowledgement
+            inputBuffer = ""
+            statusLine = "THEN LEAVE AND BEGONE!"
+            return AK_GAME_RESULT_OK
+        case .acknowledgement:
+            if character == " " {
+                prompt = .none
+                statusLine = ""
+                return AK_GAME_RESULT_OK
+            }
+            statusLine = "PRESS -SPACE- TO CONT."
+            return AK_GAME_RESULT_INVALID_COMMAND
+        case .none:
+            return AK_GAME_RESULT_INVALID_COMMAND
+        }
+    }
+
+    private func handleAttackWeapon(_ character: Character) -> AkGameResultCode {
+        switch character {
+        case "R":
+            return attack(with: AK_GAME_ITEM_RAPIER)
+        case "A":
+            pendingAttackItem = AK_GAME_ITEM_AXE
+            prompt = .axeStyle
+            statusLine = "TO THROW OR SWING"
+            return AK_GAME_RESULT_OK
+        case "S":
+            return attack(with: AK_GAME_ITEM_SHIELD)
+        case "B":
+            return attack(with: AK_GAME_ITEM_BOW)
+        case "M":
+            if state.player_class == AK_GAME_CLASS_MAGE {
+                prompt = .magicChoice
+                statusLine = "1-LADDER-UP 2-LADDER-DN 3-KILL 4-BAD??"
+                return AK_GAME_RESULT_OK
+            }
+            return castMagic(choice: 1)
+        default:
+            statusLine = "WHICH WEAPON"
+            return AK_GAME_RESULT_INVALID_COMMAND
+        }
+    }
+
+    private func handleAxeStyle(_ character: Character) -> AkGameResultCode {
+        if character == "T" {
+            if state.inventory.2 < 1 {
+                prompt = .attackWeapon
+                statusLine = "NOT OWNED"
+                return AK_GAME_RESULT_REJECTED
+            }
+            state.inventory.2 -= 1
+            return attack(with: AK_GAME_ITEM_BOW)
+        }
+        return attack(with: pendingAttackItem)
+    }
+
+    private func promptAfterApplying(command: AkGameCommandType, code: AkGameResultCode) -> AkalabethPrompt {
+        guard code == AK_GAME_RESULT_OK else {
+            return prompt
+        }
+        if command == AK_GAME_COMMAND_ENTER && state.mode == AK_GAME_MODE_QUEST && state.quest_target == 0 {
+            statusLine = "WHAT IS THY NAME PEASANT"
+            return .questName
+        }
+        if state.mode == AK_GAME_MODE_QUEST || state.mode == AK_GAME_MODE_VICTORY || state.mode == AK_GAME_MODE_DEATH {
+            return .none
+        }
+        return .none
     }
 
     private func applyDirectionalInput(_ dungeonCommand: AkGameCommandType) -> AkGameResultCode {
