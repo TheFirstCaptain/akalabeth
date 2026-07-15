@@ -8,10 +8,22 @@ public enum AkalabethColorTreatment: String, CaseIterable, Sendable {
 public struct AkalabethSettings: Equatable, Sendable {
     public var colorTreatment: AkalabethColorTreatment
     public var windowScale: Int
+    public var integerScaling: Bool
+    public var highContrast: Bool
+    public var scanlines: Bool
 
-    public init(colorTreatment: AkalabethColorTreatment = .green, windowScale: Int = 2) {
+    public init(
+        colorTreatment: AkalabethColorTreatment = .green,
+        windowScale: Int = 2,
+        integerScaling: Bool = true,
+        highContrast: Bool = false,
+        scanlines: Bool = false
+    ) {
         self.colorTreatment = colorTreatment
         self.windowScale = max(1, min(windowScale, 3))
+        self.integerScaling = integerScaling
+        self.highContrast = highContrast
+        self.scanlines = scanlines
     }
 }
 
@@ -44,12 +56,24 @@ public final class AkalabethPersistence {
         let colorRaw = defaults.string(forKey: Keys.colorTreatment)
         let color = colorRaw.flatMap(AkalabethColorTreatment.init(rawValue:)) ?? .green
         let scale = defaults.object(forKey: Keys.windowScale) == nil ? 2 : defaults.integer(forKey: Keys.windowScale)
-        return AkalabethSettings(colorTreatment: color, windowScale: scale)
+        let integerScaling = defaults.object(forKey: Keys.integerScaling) == nil ? true : defaults.bool(forKey: Keys.integerScaling)
+        let highContrast = defaults.bool(forKey: Keys.highContrast)
+        let scanlines = defaults.bool(forKey: Keys.scanlines)
+        return AkalabethSettings(
+            colorTreatment: color,
+            windowScale: scale,
+            integerScaling: integerScaling,
+            highContrast: highContrast,
+            scanlines: scanlines
+        )
     }
 
     public func saveSettings(_ settings: AkalabethSettings) {
         defaults.set(settings.colorTreatment.rawValue, forKey: Keys.colorTreatment)
         defaults.set(settings.windowScale, forKey: Keys.windowScale)
+        defaults.set(settings.integerScaling, forKey: Keys.integerScaling)
+        defaults.set(settings.highContrast, forKey: Keys.highContrast)
+        defaults.set(settings.scanlines, forKey: Keys.scanlines)
     }
 
     public func saveSession(_ session: GameSession) throws {
@@ -85,5 +109,8 @@ public final class AkalabethPersistence {
     private enum Keys {
         static let colorTreatment = "colorTreatment"
         static let windowScale = "windowScale"
+        static let integerScaling = "integerScaling"
+        static let highContrast = "highContrast"
+        static let scanlines = "scanlines"
     }
 }

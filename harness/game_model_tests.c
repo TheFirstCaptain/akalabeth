@@ -834,6 +834,124 @@ static void test_reset_restores_initial_state(void) {
     assert(result.events[0].type == AK_GAME_EVENT_STATE_CHANGED);
 }
 
+static void test_compatibility_golden_fixtures(void) {
+    AkGameState state;
+    AkGameCommandResult result;
+    AkGameCommand command;
+    int expected_stats[AK_GAME_STAT_COUNT] = {10, 20, 19, 22, 21, 19};
+    int overworld_counts[6] = {0, 0, 0, 0, 0, 0};
+    int expected_overworld_counts[6] = {271, 114, 24, 23, 8, 1};
+    int expected_overworld_row_10[AK_GAME_OVERWORLD_SIZE] = {
+        1, 0, 4, 2, 0, 0, 0, 0, 0, 0, 0, 0, 3, 0, 0, 0, 0, 0, 0, 0, 1
+    };
+    int expected_dungeon_row_7[AK_GAME_DUNGEON_SIZE] = {
+        1, 0, 3, 7, 4, 0, 1, 0, 3, 0, 1
+    };
+    int x;
+    int y;
+    int i;
+
+    ak_game_init(&state);
+
+    command = command_with_value(AK_GAME_COMMAND_SET_LUCKY_NUMBER, 1234);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    command = command_with_value(AK_GAME_COMMAND_SET_LEVEL, 5);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(memcmp(state.stats, expected_stats, sizeof(expected_stats)) == 0);
+
+    command = command_with_value(AK_GAME_COMMAND_ACCEPT_CHARACTER, 0);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    command = class_command(AK_GAME_CLASS_FIGHTER);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    command = command_with_value(AK_GAME_COMMAND_EXIT, 0);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+
+    assert(state.overworld_x == 3);
+    assert(state.overworld_y == 17);
+    for (x = 0; x < AK_GAME_OVERWORLD_SIZE; x++) {
+        assert(state.overworld[x][10] == expected_overworld_row_10[x]);
+    }
+    for (y = 0; y < AK_GAME_OVERWORLD_SIZE; y++) {
+        for (x = 0; x < AK_GAME_OVERWORLD_SIZE; x++) {
+            int tile = state.overworld[x][y];
+            assert(tile >= 0 && tile < 6);
+            overworld_counts[tile]++;
+        }
+    }
+    assert(memcmp(overworld_counts, expected_overworld_counts, sizeof(expected_overworld_counts)) == 0);
+
+    state.overworld_x = 10;
+    state.overworld_y = 10;
+    state.overworld[10][10] = AK_GAME_TILE_DUNGEON;
+    state.inventory[AK_GAME_ITEM_FOOD] = 99;
+    command = command_with_value(AK_GAME_COMMAND_ENTER, 0);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+
+    assert(state.dungeon_level == 1);
+    assert(state.dungeon_x == 1);
+    assert(state.dungeon_y == 1);
+    assert(state.facing == AK_GAME_DIRECTION_EAST);
+    for (x = 0; x < AK_GAME_DUNGEON_SIZE; x++) {
+        assert(state.dungeon[x][7] == expected_dungeon_row_7[x]);
+    }
+    for (i = 1; i <= AK_GAME_MONSTER_COUNT; i++) {
+        if (i == 2) {
+            assert(state.monster_active[i] == 1);
+            assert(state.monster_x[i] == 2);
+            assert(state.monster_y[i] == 1);
+            assert(state.monster_hit_points[i] == 14);
+        } else {
+            assert(state.monster_active[i] == 0);
+        }
+    }
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.facing = AK_GAME_DIRECTION_EAST;
+    state.dungeon_level = 1;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.dungeon[6][5] = AK_GAME_DUNGEON_CHEST;
+    command = command_with_value(AK_GAME_COMMAND_FORWARD, 0);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.stats[AK_GAME_STAT_GOLD] == 3);
+    assert(state.inventory[AK_GAME_ITEM_RAPIER] == 1);
+    assert(state.dungeon[6][5] == AK_GAME_DUNGEON_OPEN);
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.player_class = AK_GAME_CLASS_FIGHTER;
+    state.facing = AK_GAME_DIRECTION_EAST;
+    state.dungeon_level = 1;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    state.stats[AK_GAME_STAT_DEXTERITY] = 100;
+    state.stats[AK_GAME_STAT_STRENGTH] = 50;
+    state.inventory[AK_GAME_ITEM_RAPIER] = 1;
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.monster_active[1] = 1;
+    state.monster_x[1] = 6;
+    state.monster_y[1] = 5;
+    state.monster_hit_points[1] = 100;
+    command = attack_command(AK_GAME_ITEM_RAPIER);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_hit_points[1] == 89);
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_QUEST;
+    state.location = AK_GAME_LOCATION_CASTLE;
+    state.stats[AK_GAME_STAT_WISDOM] = 9;
+    state.stats[AK_GAME_STAT_HIT_POINTS] = 20;
+    command = command_with_value(AK_GAME_COMMAND_ACKNOWLEDGE, 0);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.quest_target == 3);
+    assert(state.stats[AK_GAME_STAT_HIT_POINTS] == 21);
+    assert(state.stats[AK_GAME_STAT_WISDOM] == 10);
+}
+
 static void test_names_are_stable(void) {
     assert(strcmp(ak_game_mode_name(AK_GAME_MODE_OVERWORLD), "overworld") == 0);
     assert(strcmp(ak_game_mode_name(AK_GAME_MODE_VICTORY), "victory") == 0);
@@ -868,6 +986,7 @@ int main(void) {
     test_store_purchase_rules();
     test_mage_store_restrictions();
     test_reset_restores_initial_state();
+    test_compatibility_golden_fixtures();
     test_names_are_stable();
     return 0;
 }

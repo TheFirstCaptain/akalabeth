@@ -2,7 +2,7 @@
 
 This document characterizes every observed `RND` use in `AKLABETH.TXT`. The portable adapter in `Core/include/ak_random.h` preserves the command contract needed by extracted rules: negative arguments reseed, zero repeats the last generated value, and positive arguments advance the sequence.
 
-The current adapter is deterministic and source-shaped, but not yet proven bit-for-bit identical to Applesoft BASIC. Exact Apple II numeric compatibility remains an open validation task until an execution reference is available.
+The current adapter is deterministic and source-shaped, but not bit-for-bit proven identical to Applesoft BASIC. F-014 locks representative startup, overworld, dungeon, combat, loot, and quest fixtures against the current portable contract. Exact Apple II numeric compatibility remains an external validation task until an execution reference is available.
 
 ## Source Uses
 
@@ -37,10 +37,10 @@ The current adapter is deterministic and source-shaped, but not yet proven bit-f
 - `ak_random_rnd(random, positive_value)` advances and returns the next value. The magnitude of positive values is ignored, matching the way Akalabeth uses `RND(1)`.
 - `ak_random_int` implements the positive `INT(RND(1) * multiplier + offset)` shape used by placement, loot, amulet, and damage rules.
 - `ak_random_chance_greater_than` implements the common `RND(1) > threshold` shape.
+- Harness coverage pins the default sequence, integer negative seeds, zero-repeat behavior, and the fractional dungeon seed shape `-ABS(LN) - TX * 10 - TY * 1000 + INOUT * 31.4`.
 
 ## Open Questions
 
-- The adapter has not been validated against a real Applesoft BASIC runtime, so generated maps and combat results should not yet be considered Apple II bit-exact.
+- The adapter has not been validated against a real Applesoft BASIC runtime, so generated maps and combat results are portable golden fixtures rather than Apple II bit-exact reference outputs.
 - Applesoft floating-point precision and `RND` seed encoding may differ from the current deterministic seed mixer, especially for fractional dungeon seeds.
 - `INT(SQR(RND(1)) * 21 + 4)` intentionally remains a game-rule expression rather than an RNG helper because it belongs to character generation, not the random source itself.
-

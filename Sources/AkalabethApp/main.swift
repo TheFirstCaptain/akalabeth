@@ -12,6 +12,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private var session: GameSession
     private var colorMenuItems: [AkalabethColorTreatment: NSMenuItem] = [:]
     private var scaleMenuItems: [Int: NSMenuItem] = [:]
+    private var integerScalingMenuItem: NSMenuItem?
+    private var highContrastMenuItem: NSMenuItem?
+    private var scanlinesMenuItem: NSMenuItem?
 
     override init() {
         let persistence = AkalabethPersistence()
@@ -40,19 +43,25 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     @objc private func newGame() {
         session.reset()
         try? persistence.deleteSave()
+        session.setStatusLine("New game - save cleared")
         gameView?.session = session
         saveCurrentSession()
     }
 
     @objc private func resetGame() {
         session.reset(fixture: AppDelegate.fixtureFromArguments())
+        session.setStatusLine("Reset game")
         gameView?.session = session
         saveCurrentSession()
     }
 
     @objc private func saveGame() {
-        saveCurrentSession()
-        session.setStatusLine("Game saved")
+        do {
+            try persistence.saveSession(session)
+            session.setStatusLine("Game saved")
+        } catch {
+            session.setStatusLine("Save failed")
+        }
         gameView?.needsDisplay = true
     }
 
@@ -93,6 +102,48 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         updateSettings(windowScale: 3)
     }
 
+    @objc private func toggleIntegerScaling() {
+        updateSettings(integerScaling: !settings.integerScaling)
+    }
+
+    @objc private func toggleHighContrast() {
+        updateSettings(highContrast: !settings.highContrast)
+    }
+
+    @objc private func toggleScanlines() {
+        updateSettings(scanlines: !settings.scanlines)
+    }
+
+    @objc private func showAbout() {
+        let alert = NSAlert()
+        alert.messageText = "Akalabeth"
+        alert.informativeText = """
+        Native macOS shell for Akalabeth using the portable C game core.
+
+        Historical play remains keyboard-first. Save/resume, display settings, fixtures, and packaging are modern conveniences layered around the original flow.
+        """
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
+    @objc private func showHelp() {
+        let alert = NSAlert()
+        alert.messageText = "Akalabeth Help"
+        alert.informativeText = """
+        Startup: type a lucky number, press Return, choose a level, then accept or reroll the character.
+
+        Movement: arrow keys move outdoors. In dungeons, Left and Right turn, Up moves forward, P or Space passes, and E enters towns, castles, dungeons, or ladders.
+
+        Town and combat keys: F food, R rapier, A axe or attack prompt, S shield, B bow, M magic amulet, Q leaves town.
+
+        Save behavior: the app autosaves after play input. Game > Save Game writes immediately, Resume Saved Game reloads the modern save file, New Game clears it, and Reset restarts the current launch fixture.
+
+        Compatibility: gameplay uses source-shaped rules from the Applesoft listing. The RNG and fixture tests pin the portable compatibility contract; exact Apple II numeric equivalence is not claimed.
+        """
+        alert.addButton(withTitle: "OK")
+        alert.runModal()
+    }
+
     @objc private func launchTownFixture() {
         loadFixture(.town)
     }
@@ -111,6 +162,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     private func loadFixture(_ fixture: AkalabethFixture) {
         session = GameSession(fixture: fixture)
+        session.setStatusLine("Loaded \(fixture.rawValue) fixture")
         gameView?.session = session
     }
 
@@ -146,6 +198,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         mainMenu.addItem(appItem)
         let appMenu = NSMenu()
         appItem.submenu = appMenu
+        appMenu.addItem(withTitle: "About Akalabeth", action: #selector(showAbout), keyEquivalent: "").target = self
+        appMenu.addItem(.separator())
         appMenu.addItem(withTitle: "Quit Akalabeth", action: #selector(NSApplication.terminate(_:)), keyEquivalent: "q")
 
         let gameItem = NSMenuItem()
@@ -175,10 +229,24 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         colorMenuItems[.amber] = amber
         settingsMenu.addItem(.separator())
         for scale in 1...3 {
-            let item = settingsMenu.addItem(withTitle: "Window Scale \(scale)x", action: scaleSelector(scale), keyEquivalent: "")
+            let title = scale == 1 ? "Original Scale (1x)" : "Window Scale \(scale)x"
+            let item = settingsMenu.addItem(withTitle: title, action: scaleSelector(scale), keyEquivalent: "")
             item.target = self
             scaleMenuItems[scale] = item
         }
+        settingsMenu.addItem(.separator())
+        integerScalingMenuItem = settingsMenu.addItem(withTitle: "Integer Scaling", action: #selector(toggleIntegerScaling), keyEquivalent: "")
+        integerScalingMenuItem?.target = self
+        highContrastMenuItem = settingsMenu.addItem(withTitle: "High Contrast", action: #selector(toggleHighContrast), keyEquivalent: "")
+        highContrastMenuItem?.target = self
+        scanlinesMenuItem = settingsMenu.addItem(withTitle: "Scanline Treatment", action: #selector(toggleScanlines), keyEquivalent: "")
+        scanlinesMenuItem?.target = self
+
+        let helpItem = NSMenuItem()
+        mainMenu.addItem(helpItem)
+        let helpMenu = NSMenu(title: "Help")
+        helpItem.submenu = helpMenu
+        helpMenu.addItem(withTitle: "Akalabeth Help", action: #selector(showHelp), keyEquivalent: "?").target = self
         refreshSettingsMenu()
     }
 
@@ -186,7 +254,13 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try? persistence.saveSession(session)
     }
 
-    private func updateSettings(colorTreatment: AkalabethColorTreatment? = nil, windowScale: Int? = nil) {
+    private func updateSettings(
+        colorTreatment: AkalabethColorTreatment? = nil,
+        windowScale: Int? = nil,
+        integerScaling: Bool? = nil,
+        highContrast: Bool? = nil,
+        scanlines: Bool? = nil
+    ) {
         if let colorTreatment {
             settings.colorTreatment = colorTreatment
         }
@@ -195,8 +269,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             window?.setContentSize(AppDelegate.windowSize(for: windowScale))
             window?.center()
         }
+        if let integerScaling {
+            settings.integerScaling = integerScaling
+        }
+        if let highContrast {
+            settings.highContrast = highContrast
+        }
+        if let scanlines {
+            settings.scanlines = scanlines
+        }
         persistence.saveSettings(settings)
         gameView?.settings = settings
+        session.setStatusLine("Display settings saved")
+        gameView?.needsDisplay = true
         refreshSettingsMenu()
     }
 
@@ -207,6 +292,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         for (scale, item) in scaleMenuItems {
             item.state = settings.windowScale == scale ? .on : .off
         }
+        integerScalingMenuItem?.state = settings.integerScaling ? .on : .off
+        highContrastMenuItem?.state = settings.highContrast ? .on : .off
+        scanlinesMenuItem?.state = settings.scanlines ? .on : .off
     }
 
     private func scaleSelector(_ scale: Int) -> Selector {
@@ -310,6 +398,10 @@ final class GameView: NSView {
                     draw(command: commands[index], currentMode: &currentMode)
                 }
             }
+        }
+
+        if settings.scanlines {
+            drawScanlines()
         }
 
         if !session.inputBuffer.isEmpty || !session.statusLine.isEmpty {
@@ -486,6 +578,23 @@ final class GameView: NSView {
         drawString(text, at: NSPoint(x: virtualRect.minX, y: virtualRect.minY + 2), font: hiresFont, inverse: true)
     }
 
+    private func drawScanlines() {
+        let rect = virtualRect
+        let path = NSBezierPath()
+        let spacing = max(2.0, pixelScale * 2.0)
+        var y = rect.minY
+
+        while y <= rect.maxY {
+            path.move(to: NSPoint(x: rect.minX, y: y))
+            path.line(to: NSPoint(x: rect.maxX, y: y))
+            y += spacing
+        }
+
+        NSColor.black.withAlphaComponent(settings.highContrast ? 0.18 : 0.28).setStroke()
+        path.lineWidth = 1.0
+        path.stroke()
+    }
+
     private func drawString(_ text: String, at point: NSPoint, font: NSFont, inverse: Bool) {
         let attributes: [NSAttributedString.Key: Any] = [
             .font: font,
@@ -496,6 +605,9 @@ final class GameView: NSView {
     }
 
     private var displayColor: NSColor {
+        if settings.highContrast {
+            return .white
+        }
         switch settings.colorTreatment {
         case .green:
             return .systemGreen
@@ -535,7 +647,7 @@ final class GameView: NSView {
     }
 
     private var virtualRect: NSRect {
-        let scale = min(bounds.width / 280.0, bounds.height / 192.0)
+        let scale = pixelScale
         let size = NSSize(width: 280.0 * scale, height: 192.0 * scale)
         return NSRect(
             x: bounds.midX - size.width / 2.0,
@@ -546,7 +658,11 @@ final class GameView: NSView {
     }
 
     private var pixelScale: CGFloat {
-        min(bounds.width / 280.0, bounds.height / 192.0)
+        let rawScale = min(bounds.width / 280.0, bounds.height / 192.0)
+        guard settings.integerScaling && rawScale >= 1.0 else {
+            return rawScale
+        }
+        return max(1.0, floor(rawScale))
     }
 
     private var hiresFont: NSFont {

@@ -15,8 +15,8 @@
 | F-011 | Implemented | Mac persistence, settings, and distribution package |
 | F-012 | Implemented | Visual fidelity renderer |
 | F-013 | Implemented | Complete interaction prompts |
-| F-014 | Planned | Applesoft compatibility pass |
-| F-015 | Planned | Modern app UX layer |
+| F-014 | Implemented | Applesoft compatibility pass |
+| F-015 | Implemented | Modern app UX layer |
 | F-016 | Planned | Audio and feedback |
 | F-017 | Planned | Save format hardening |
 | F-018 | Planned | Packaging and release readiness |

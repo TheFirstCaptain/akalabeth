@@ -123,8 +123,20 @@ import Foundation
         defaults.removePersistentDomain(forName: suiteName)
     }
 
-    persistence.saveSettings(AkalabethSettings(colorTreatment: .amber, windowScale: 3))
-    #expect(persistence.loadSettings() == AkalabethSettings(colorTreatment: .amber, windowScale: 3))
+    persistence.saveSettings(AkalabethSettings(
+        colorTreatment: .amber,
+        windowScale: 3,
+        integerScaling: false,
+        highContrast: true,
+        scanlines: true
+    ))
+    #expect(persistence.loadSettings() == AkalabethSettings(
+        colorTreatment: .amber,
+        windowScale: 3,
+        integerScaling: false,
+        highContrast: true,
+        scanlines: true
+    ))
 
     let session = GameSession(fixture: .quest)
     try persistence.saveSession(session)

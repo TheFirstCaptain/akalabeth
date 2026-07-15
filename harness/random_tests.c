@@ -99,14 +99,15 @@ static void test_fractional_negative_seed_supports_dungeon_seed_shape(void) {
     AkRandom first;
     AkRandom second;
     double seed_argument = -1234.0 - 9.0 * 10.0 - 12.0 * 1000.0 + 3.0 * 31.4;
+    double first_value;
 
     ak_random_init(&first);
     ak_random_init(&second);
 
-    assert(close_enough(
-        ak_random_rnd(&first, seed_argument),
-        ak_random_rnd(&second, seed_argument)
-    ));
+    first_value = ak_random_rnd(&first, seed_argument);
+    assert(close_enough(first_value, ak_random_rnd(&second, seed_argument)));
+    assert(close_enough(first_value, 0.533016623463));
+    assert(first.state == 1144644483u);
     assert(first.state == second.state);
 }
 
