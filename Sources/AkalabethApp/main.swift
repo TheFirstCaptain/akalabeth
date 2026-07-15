@@ -302,13 +302,12 @@ final class GameView: NSView {
 
         var buffer = session.renderCommands()
         let commandsCount = Int(buffer.count)
-        let lineScaleX = bounds.width / 280.0
-        let lineScaleY = bounds.height / 192.0
+        var currentMode = AK_RENDER_MODE_TEXT
 
         withUnsafePointer(to: &buffer.commands) { pointer in
             pointer.withMemoryRebound(to: AkRenderCommand.self, capacity: max(commandsCount, 1)) { commands in
                 for index in 0..<commandsCount {
-                    draw(command: commands[index], lineScaleX: lineScaleX, lineScaleY: lineScaleY)
+                    draw(command: commands[index], currentMode: &currentMode)
                 }
             }
         }
@@ -318,63 +317,92 @@ final class GameView: NSView {
         }
     }
 
-    private func draw(command: AkRenderCommand, lineScaleX: CGFloat, lineScaleY: CGFloat) {
+    private func draw(command: AkRenderCommand, currentMode: inout AkRenderMode) {
         switch command.type {
-        case AK_RENDER_COMMAND_SET_MODE, AK_RENDER_COMMAND_CLEAR:
+        case AK_RENDER_COMMAND_SET_MODE:
+            currentMode = command.mode
+        case AK_RENDER_COMMAND_CLEAR:
             return
         case AK_RENDER_COMMAND_SET_COLOR:
             return
         case AK_RENDER_COMMAND_TEXT:
-            drawText(commandText(command), column: Int(command.x), row: Int(command.y), inverse: command.inverse != 0)
+            if currentMode == AK_RENDER_MODE_HIRES && (command.x > 40 || command.y > 24) {
+                drawHiresText(commandText(command), x: command.x, y: command.y, inverse: command.inverse != 0)
+            } else {
+                drawText(commandText(command), column: Int(command.x), row: Int(command.y), inverse: command.inverse != 0)
+            }
         case AK_RENDER_COMMAND_PROMPT:
             drawText(commandText(command), column: Int(command.x), row: Int(command.y), inverse: false)
         case AK_RENDER_COMMAND_STATUS:
             drawText("\(commandText(command))=\(command.value)", column: Int(command.x), row: Int(command.y), inverse: false)
         case AK_RENDER_COMMAND_LINE:
-            drawLine(command, scaleX: lineScaleX, scaleY: lineScaleY)
+            drawLine(command)
         case AK_RENDER_COMMAND_TILE:
-            drawTile(command, scaleX: lineScaleX, scaleY: lineScaleY)
+            drawTile(command, mode: currentMode)
         case AK_RENDER_COMMAND_CREATURE:
-            drawCreature(command, scaleX: lineScaleX, scaleY: lineScaleY)
+            drawCreature(command)
         default:
             return
         }
     }
 
-    private func drawLine(_ command: AkRenderCommand, scaleX: CGFloat, scaleY: CGFloat) {
+    private func drawLine(_ command: AkRenderCommand) {
         let path = NSBezierPath()
-        path.move(to: point(x: command.x, y: command.y, scaleX: scaleX, scaleY: scaleY))
-        path.line(to: point(x: command.x2, y: command.y2, scaleX: scaleX, scaleY: scaleY))
+        path.move(to: point(x: command.x, y: command.y))
+        path.line(to: point(x: command.x2, y: command.y2))
         displayColor.setStroke()
-        path.lineWidth = 2
+        path.lineWidth = max(1.0, pixelScale)
         path.stroke()
     }
 
-    private func drawTile(_ command: AkRenderCommand, scaleX: CGFloat, scaleY: CGFloat) {
-        let center = point(x: command.x, y: command.y, scaleX: scaleX, scaleY: scaleY)
-        let rect = NSRect(x: center.x - 28, y: center.y - 18, width: 56, height: 36)
-        displayColor.setStroke()
-        NSBezierPath(rect: rect).stroke()
-        drawString(commandText(command).uppercased(), at: NSPoint(x: rect.minX + 5, y: rect.midY - 7), font: smallFont, inverse: false)
+    private func drawTile(_ command: AkRenderCommand, mode: AkRenderMode) {
+        let name = commandText(command)
+        if mode == AK_RENDER_MODE_HIRES && isOverworldTile(name) {
+            drawOverworldTile(command)
+            return
+        }
+        drawDungeonTile(command)
     }
 
-    private func drawCreature(_ command: AkRenderCommand, scaleX: CGFloat, scaleY: CGFloat) {
-        let center = point(x: command.x, y: command.y, scaleX: scaleX, scaleY: scaleY)
-        let rect = NSRect(x: center.x - 46, y: center.y - 28, width: 92, height: 56)
+    private func drawCreature(_ command: AkRenderCommand) {
+        let center = point(x: command.x, y: command.y)
+        let rect = rectAround(center: center, width: 60, height: 72)
         displayColor.setStroke()
-        NSBezierPath(ovalIn: rect).stroke()
-        drawString(commandText(command).uppercased(), at: NSPoint(x: rect.minX + 8, y: rect.midY - 7), font: smallFont, inverse: false)
+        let path = NSBezierPath()
+        path.move(to: NSPoint(x: rect.midX, y: rect.maxY))
+        path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
+        path.line(to: NSPoint(x: rect.midX + 10 * pixelScale, y: rect.midY - 8 * pixelScale))
+        path.line(to: NSPoint(x: rect.midX + 18 * pixelScale, y: rect.minY))
+        path.move(to: NSPoint(x: rect.midX, y: rect.maxY))
+        path.line(to: NSPoint(x: rect.minX, y: rect.midY))
+        path.line(to: NSPoint(x: rect.midX - 10 * pixelScale, y: rect.midY - 8 * pixelScale))
+        path.line(to: NSPoint(x: rect.midX - 18 * pixelScale, y: rect.minY))
+        path.move(to: NSPoint(x: rect.midX - 14 * pixelScale, y: rect.midY + 10 * pixelScale))
+        path.line(to: NSPoint(x: rect.midX + 14 * pixelScale, y: rect.midY + 10 * pixelScale))
+        path.move(to: NSPoint(x: rect.midX, y: rect.maxY - 8 * pixelScale))
+        path.line(to: NSPoint(x: rect.midX, y: rect.minY + 8 * pixelScale))
+        path.lineWidth = max(1.0, pixelScale)
+        path.stroke()
+        drawHiresText(commandText(command).uppercased(), x: command.x - 30, y: command.y - 44, inverse: true)
     }
 
     private func drawText(_ text: String, column: Int, row: Int, inverse: Bool) {
-        let x = CGFloat(max(column - 1, 0)) * 10.0 + 16.0
-        let y = bounds.height - CGFloat(max(row, 1)) * 22.0 - 8.0
-        drawString(text, at: NSPoint(x: x, y: y), font: textFont, inverse: inverse)
+        let rect = virtualRect
+        let cellWidth = rect.width / 40.0
+        let cellHeight = rect.height / 24.0
+        let x = rect.minX + CGFloat(max(column - 1, 0)) * cellWidth
+        let y = rect.maxY - CGFloat(max(row, 1)) * cellHeight
+        drawString(text, at: NSPoint(x: x, y: y), font: textFontForCellHeight(cellHeight), inverse: inverse)
+    }
+
+    private func drawHiresText(_ text: String, x: Int32, y: Int32, inverse: Bool) {
+        let point = point(x: x, y: y)
+        drawString(text, at: point, font: hiresFont, inverse: inverse)
     }
 
     private func drawOverlay() {
         let text = session.inputBuffer.isEmpty ? session.statusLine : session.inputBuffer
-        drawString(text, at: NSPoint(x: 16, y: 16), font: textFont, inverse: true)
+        drawString(text, at: NSPoint(x: virtualRect.minX, y: virtualRect.minY + 2), font: hiresFont, inverse: true)
     }
 
     private func drawString(_ text: String, at point: NSPoint, font: NSFont, inverse: Bool) {
@@ -395,8 +423,158 @@ final class GameView: NSView {
         }
     }
 
-    private func point(x: Int32, y: Int32, scaleX: CGFloat, scaleY: CGFloat) -> NSPoint {
-        NSPoint(x: CGFloat(x) * scaleX, y: bounds.height - CGFloat(y) * scaleY)
+    private func point(x: Int32, y: Int32) -> NSPoint {
+        NSPoint(x: virtualRect.minX + CGFloat(x) * pixelScale, y: virtualRect.maxY - CGFloat(y) * pixelScale)
+    }
+
+    private func rectAround(center: NSPoint, width: CGFloat, height: CGFloat) -> NSRect {
+        NSRect(
+            x: center.x - width * pixelScale / 2.0,
+            y: center.y - height * pixelScale / 2.0,
+            width: width * pixelScale,
+            height: height * pixelScale
+        )
+    }
+
+    private var virtualRect: NSRect {
+        let scale = min(bounds.width / 280.0, bounds.height / 192.0)
+        let size = NSSize(width: 280.0 * scale, height: 192.0 * scale)
+        return NSRect(
+            x: bounds.midX - size.width / 2.0,
+            y: bounds.midY - size.height / 2.0,
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private var pixelScale: CGFloat {
+        min(bounds.width / 280.0, bounds.height / 192.0)
+    }
+
+    private var hiresFont: NSFont {
+        NSFont.monospacedSystemFont(ofSize: max(8.0, 8.0 * pixelScale), weight: .regular)
+    }
+
+    private func textFontForCellHeight(_ cellHeight: CGFloat) -> NSFont {
+        NSFont.monospacedSystemFont(ofSize: max(7.0, min(18.0 * pixelScale, cellHeight * 0.78)), weight: .regular)
+    }
+
+    private func isOverworldTile(_ name: String) -> Bool {
+        switch name {
+        case "open", "mountain", "field", "town", "dungeon", "castle":
+            return true
+        default:
+            return false
+        }
+    }
+
+    private func drawOverworldTile(_ command: AkRenderCommand) {
+        let center = point(x: command.x, y: command.y)
+        let rect = rectAround(center: center, width: 50, height: 50)
+        let path = NSBezierPath()
+        let s = pixelScale
+        let x = rect.minX
+        let y = rect.minY
+
+        switch UInt32(command.value) {
+        case AK_GAME_TILE_MOUNTAIN.rawValue:
+            path.move(to: NSPoint(x: x + 10 * s, y: y))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 20 * s, y: y + 20 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 20 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y))
+            path.move(to: NSPoint(x: x, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 40 * s))
+            path.move(to: NSPoint(x: x + 50 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 40 * s))
+            path.move(to: NSPoint(x: x, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 10 * s))
+            path.move(to: NSPoint(x: x + 40 * s, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 50 * s, y: y + 10 * s))
+            path.move(to: NSPoint(x: x + 10 * s, y: y + 50 * s))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 30 * s))
+            path.line(to: NSPoint(x: x + 20 * s, y: y + 30 * s))
+            path.line(to: NSPoint(x: x + 20 * s, y: y + 20 * s))
+            path.line(to: NSPoint(x: x + 30 * s, y: y + 20 * s))
+            path.line(to: NSPoint(x: x + 30 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 50 * s))
+        case AK_GAME_TILE_FIELD.rawValue:
+            path.appendRect(NSRect(x: x + 20 * s, y: y + 20 * s, width: 10 * s, height: 10 * s))
+        case AK_GAME_TILE_TOWN.rawValue:
+            path.move(to: NSPoint(x: x + 10 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 20 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 20 * s, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 20 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 20 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 30 * s, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 30 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 30 * s))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 30 * s))
+            path.line(to: NSPoint(x: x + 10 * s, y: y + 40 * s))
+        case AK_GAME_TILE_DUNGEON.rawValue:
+            path.move(to: NSPoint(x: x + 20 * s, y: y + 20 * s))
+            path.line(to: NSPoint(x: x + 30 * s, y: y + 30 * s))
+            path.move(to: NSPoint(x: x + 20 * s, y: y + 30 * s))
+            path.line(to: NSPoint(x: x + 30 * s, y: y + 20 * s))
+        case AK_GAME_TILE_CASTLE.rawValue:
+            path.appendRect(NSRect(x: x, y: y, width: 50 * s, height: 50 * s))
+            path.appendRect(NSRect(x: x + 10 * s, y: y + 10 * s, width: 30 * s, height: 30 * s))
+            path.move(to: NSPoint(x: x + 10 * s, y: y + 10 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 40 * s))
+            path.move(to: NSPoint(x: x + 10 * s, y: y + 40 * s))
+            path.line(to: NSPoint(x: x + 40 * s, y: y + 10 * s))
+        default:
+            return
+        }
+
+        displayColor.setStroke()
+        path.lineWidth = max(1.0, s)
+        path.stroke()
+    }
+
+    private func drawDungeonTile(_ command: AkRenderCommand) {
+        let center = point(x: command.x, y: command.y)
+        let rect = rectAround(center: center, width: 42, height: 34)
+        let path = NSBezierPath()
+        let s = pixelScale
+
+        switch UInt32(command.value) {
+        case AK_GAME_DUNGEON_WALL.rawValue:
+            path.appendRect(rect)
+            path.move(to: NSPoint(x: rect.minX, y: rect.maxY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
+        case AK_GAME_DUNGEON_CHEST.rawValue:
+            path.appendRect(rect)
+            path.move(to: NSPoint(x: rect.minX, y: rect.midY))
+            path.line(to: NSPoint(x: rect.minX + 10 * s, y: rect.maxY + 8 * s))
+            path.line(to: NSPoint(x: rect.maxX + 10 * s, y: rect.maxY + 8 * s))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.midY))
+            path.move(to: NSPoint(x: rect.maxX, y: rect.maxY))
+            path.line(to: NSPoint(x: rect.maxX + 10 * s, y: rect.maxY + 8 * s))
+        case AK_GAME_DUNGEON_LADDER_DOWN.rawValue, AK_GAME_DUNGEON_LADDER_UP.rawValue, AK_GAME_DUNGEON_LADDER_DOWN_ALT.rawValue:
+            path.move(to: NSPoint(x: rect.minX + 10 * s, y: rect.minY))
+            path.line(to: NSPoint(x: rect.minX + 10 * s, y: rect.maxY))
+            path.move(to: NSPoint(x: rect.maxX - 10 * s, y: rect.minY))
+            path.line(to: NSPoint(x: rect.maxX - 10 * s, y: rect.maxY))
+            for offset in stride(from: 6.0, through: 30.0, by: 8.0) {
+                path.move(to: NSPoint(x: rect.minX + 10 * s, y: rect.minY + CGFloat(offset) * s))
+                path.line(to: NSPoint(x: rect.maxX - 10 * s, y: rect.minY + CGFloat(offset) * s))
+            }
+        case AK_GAME_DUNGEON_TRAP.rawValue:
+            path.move(to: NSPoint(x: rect.minX, y: rect.minY))
+            path.line(to: NSPoint(x: rect.midX, y: rect.maxY))
+            path.line(to: NSPoint(x: rect.maxX, y: rect.minY))
+        default:
+            return
+        }
+
+        displayColor.setStroke()
+        path.lineWidth = max(1.0, s)
+        path.stroke()
     }
 
     private func commandText(_ command: AkRenderCommand) -> String {
