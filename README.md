@@ -36,6 +36,8 @@ Scripts/package_macos_app.sh
 .build/release/Akalabeth.app/Contents/MacOS/Akalabeth
 ```
 
+For clean release packaging, signing, notarization, and manual validation steps, see `docs/RELEASE.md`.
+
 ## Validation
 
 ```bash

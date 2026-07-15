@@ -5,7 +5,7 @@
 | Path | Role |
 | --- | --- |
 | `AKLABETH.TXT` | Working Applesoft BASIC source listing |
-| `README.1ST` | Historical description of files, screenshots, monsters, and notes |
+| `README.md` | Historical description of files, screenshots, monsters, and notes |
 | `RPG.TXT` | Historical essay about the author's RPG background |
 | `udic.txt` | Ultima Dragons archive note |
 
@@ -31,7 +31,7 @@
 - Apple II text and graphics commands: `TEXT`, `HOME`, `HGR`, `HCOLOR`, `HPLOT`, `VTAB`, `HTAB`, `NORMAL`, and `INVERSE`.
 - Apple II keyboard and memory operations: `PEEK`, `POKE`, `CALL`, `PR#`, and `IN#`.
 - Applesoft random-number behavior through `RND`, including negative seeding.
-- No save-game system is described in `README.1ST`.
+- No save-game system is described in `README.md`.
 
 ## Initial Behavior Areas
 

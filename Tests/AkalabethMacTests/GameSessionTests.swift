@@ -101,16 +101,19 @@ import Foundation
     #expect(buffer.commands.0.mode == AK_RENDER_MODE_TEXT)
 }
 
-@Test func sessionSnapshotRestoresCoreState() throws {
+@Test func savedSessionRestoresCoreAndAdapterState() throws {
     let session = GameSession(fixture: .dungeon)
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
 
-    let restored = try #require(GameSession(snapshot: session.snapshot()))
+    let restored = try #require(GameSession(savedSession: session.savedSession()))
 
     #expect(restored.state.mode == AK_GAME_MODE_DUNGEON)
     #expect(restored.state.location == AK_GAME_LOCATION_DUNGEON)
     #expect(restored.state.dungeon_x == session.state.dungeon_x)
     #expect(restored.state.dungeon_y == session.state.dungeon_y)
     #expect(restored.state.inventory.0 == session.state.inventory.0)
+    #expect(restored.prompt == .attackWeapon)
+    #expect(restored.statusLine == "WHICH WEAPON")
 }
 
 @Test func sessionFeedbackMapsPurchasesBlocksDeathAndVictory() {
@@ -177,4 +180,84 @@ import Foundation
 
     try persistence.deleteSave()
     #expect(try persistence.resumeSession() == nil)
+}
+
+@Test func saveFileIsVersionedJsonNotRawMemory() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("AkalabethSaveFormatTests-\(UUID().uuidString)", isDirectory: true)
+    let suiteName = "AkalabethSaveFormatTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    let persistence = AkalabethPersistence(
+        applicationSupportDirectory: directory,
+        defaults: defaults,
+        appVersion: "test-version"
+    )
+    defer {
+        try? FileManager.default.removeItem(at: directory)
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    try persistence.saveSession(GameSession(fixture: .dungeon))
+    let data = try Data(contentsOf: persistence.saveURL)
+    let text = try #require(String(data: data, encoding: .utf8))
+
+    #expect(text.contains("\"format\" : \"com.aklabeth.save\""))
+    #expect(text.contains("\"version\" : 1"))
+    #expect(text.contains("\"appVersion\" : \"test-version\""))
+    #expect(text.contains("\"displayName\" : \"Dungeon Level 1\""))
+    #expect(!data.starts(with: Data("AKALABETHSAVE1\n".utf8)))
+    #expect(data.count != MemoryLayout<AkGameState>.size)
+}
+
+@Test func corruptAndUnsupportedSavesFailGracefully() throws {
+    let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("AkalabethCorruptSaveTests-\(UUID().uuidString)", isDirectory: true)
+    let suiteName = "AkalabethCorruptSaveTests.\(UUID().uuidString)"
+    let defaults = try #require(UserDefaults(suiteName: suiteName))
+    defaults.removePersistentDomain(forName: suiteName)
+    let persistence = AkalabethPersistence(applicationSupportDirectory: directory, defaults: defaults)
+    defer {
+        try? FileManager.default.removeItem(at: directory)
+        defaults.removePersistentDomain(forName: suiteName)
+    }
+
+    try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+    try Data("not-json".utf8).write(to: persistence.saveURL)
+    #expect(try persistence.resumeSession() == nil)
+
+    try persistence.saveSession(GameSession(fixture: .town))
+    var text = try #require(String(data: try Data(contentsOf: persistence.saveURL), encoding: .utf8))
+    text = text.replacingOccurrences(of: "\"version\" : 1", with: "\"version\" : 99")
+    try Data(text.utf8).write(to: persistence.saveURL)
+    #expect(try persistence.resumeSession() == nil)
+}
+
+@Test func saveRoundTripCoversRepresentativeModes() throws {
+    let fixtures: [AkalabethFixture] = [.town, .overworld, .dungeon, .quest]
+
+    for fixture in fixtures {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("AkalabethRoundTripTests-\(fixture.rawValue)-\(UUID().uuidString)", isDirectory: true)
+        let suiteName = "AkalabethRoundTripTests.\(fixture.rawValue).\(UUID().uuidString)"
+        let defaults = try #require(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        let persistence = AkalabethPersistence(applicationSupportDirectory: directory, defaults: defaults)
+        defer {
+            try? FileManager.default.removeItem(at: directory)
+            defaults.removePersistentDomain(forName: suiteName)
+        }
+
+        let session = GameSession(fixture: fixture)
+        try persistence.saveSession(session)
+        let resumed = try #require(try persistence.resumeSession())
+
+        #expect(resumed.state.mode == session.state.mode)
+        #expect(resumed.state.location == session.state.location)
+        #expect(resumed.state.overworld_x == session.state.overworld_x)
+        #expect(resumed.state.overworld_y == session.state.overworld_y)
+        #expect(resumed.state.dungeon_x == session.state.dungeon_x)
+        #expect(resumed.state.dungeon_y == session.state.dungeon_y)
+        #expect(resumed.state.quest_target == session.state.quest_target)
+    }
 }

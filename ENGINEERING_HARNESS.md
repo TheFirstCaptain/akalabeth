@@ -23,7 +23,7 @@ This document is the operating guide for modernizing this repository. The goal i
 ## Working Boundaries
 
 - `AKLABETH.TXT` is the historical source/reference listing. Avoid formatting churn or direct edits unless the change is explicitly about source preservation.
-- GIF files, `README.1ST`, `RPG.TXT`, and `udic.txt` are historical assets and notes. Modify them only for a documented archival reason.
+- GIF files, `README.md`, `RPG.TXT`, and `udic.txt` are historical assets and notes. Modify them only for a documented archival reason.
 - `Core/` is for portable extracted behavior and source-inspection helpers.
 - `harness/` is for command-line characterization tests that run on a modern compiler.
 - `docs/` is for modernization inventory, feature planning, bugs, and validation notes.

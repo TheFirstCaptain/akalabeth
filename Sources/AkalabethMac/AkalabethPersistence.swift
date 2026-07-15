@@ -1,4 +1,5 @@
 import Foundation
+import CAkalabeth
 
 public enum AkalabethColorTreatment: String, CaseIterable, Sendable {
     case green
@@ -31,9 +32,11 @@ public struct AkalabethSettings: Equatable, Sendable {
 }
 
 public final class AkalabethPersistence {
-    private static let saveHeader = Data("AKALABETHSAVE1\n".utf8)
+    private static let saveFormatIdentifier = "com.aklabeth.save"
+    private static let saveFormatVersion = 1
     private let fileManager: FileManager
     private let defaults: UserDefaults
+    private let appVersion: String
 
     public let applicationSupportDirectory: URL
     public let saveURL: URL
@@ -41,10 +44,12 @@ public final class AkalabethPersistence {
     public init(
         applicationSupportDirectory: URL? = nil,
         defaults: UserDefaults = .standard,
-        fileManager: FileManager = .default
+        fileManager: FileManager = .default,
+        appVersion: String = Bundle.main.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String ?? "development"
     ) {
         self.fileManager = fileManager
         self.defaults = defaults
+        self.appVersion = appVersion
         if let applicationSupportDirectory {
             self.applicationSupportDirectory = applicationSupportDirectory
         } else {
@@ -52,7 +57,7 @@ public final class AkalabethPersistence {
                 ?? URL(fileURLWithPath: NSHomeDirectory()).appendingPathComponent("Library/Application Support")
             self.applicationSupportDirectory = base.appendingPathComponent("Akalabeth", isDirectory: true)
         }
-        self.saveURL = self.applicationSupportDirectory.appendingPathComponent("SaveGame.bin")
+        self.saveURL = self.applicationSupportDirectory.appendingPathComponent("SaveGame.json")
     }
 
     public func loadSettings() -> AkalabethSettings {
@@ -84,9 +89,20 @@ public final class AkalabethPersistence {
 
     public func saveSession(_ session: GameSession) throws {
         try ensureApplicationSupportDirectory()
-        var data = Self.saveHeader
-        data.append(session.snapshot())
-        try data.write(to: saveURL, options: [.atomic])
+        let file = AkalabethSaveFile(
+            format: Self.saveFormatIdentifier,
+            version: Self.saveFormatVersion,
+            savedAt: Date(),
+            appVersion: appVersion,
+            gameMode: session.state.mode.rawValue,
+            displayName: Self.displayName(for: session),
+            session: session.savedSession()
+        )
+        let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
+        encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
+        let data = try encoder.encode(file)
+        try data.write(to: saveURL, options: Data.WritingOptions.atomic)
     }
 
     public func resumeSession() throws -> GameSession? {
@@ -94,11 +110,15 @@ public final class AkalabethPersistence {
             return nil
         }
         let data = try Data(contentsOf: saveURL)
-        guard data.starts(with: Self.saveHeader) else {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let file = try? decoder.decode(AkalabethSaveFile.self, from: data),
+              file.format == Self.saveFormatIdentifier,
+              file.version == Self.saveFormatVersion
+        else {
             return nil
         }
-        let snapshot = data.dropFirst(Self.saveHeader.count)
-        return GameSession(snapshot: Data(snapshot))
+        return GameSession(savedSession: file.session)
     }
 
     public func deleteSave() throws {
@@ -110,6 +130,39 @@ public final class AkalabethPersistence {
 
     private func ensureApplicationSupportDirectory() throws {
         try fileManager.createDirectory(at: applicationSupportDirectory, withIntermediateDirectories: true)
+    }
+
+    private static func displayName(for session: GameSession) -> String {
+        switch session.state.mode {
+        case AK_GAME_MODE_STARTUP_LUCKY_NUMBER, AK_GAME_MODE_STARTUP_LEVEL:
+            return "Startup"
+        case AK_GAME_MODE_CHARACTER_REVIEW, AK_GAME_MODE_CLASS_SELECT:
+            return "Character Creation"
+        case AK_GAME_MODE_OVERWORLD:
+            return "Overworld"
+        case AK_GAME_MODE_TOWN:
+            return "Town"
+        case AK_GAME_MODE_DUNGEON, AK_GAME_MODE_COMBAT:
+            return "Dungeon Level \(session.state.dungeon_level)"
+        case AK_GAME_MODE_QUEST:
+            return "Lord British"
+        case AK_GAME_MODE_DEATH:
+            return "Death"
+        case AK_GAME_MODE_VICTORY:
+            return "Victory"
+        default:
+            return "Akalabeth Save"
+        }
+    }
+
+    private struct AkalabethSaveFile: Codable {
+        var format: String
+        var version: Int
+        var savedAt: Date
+        var appVersion: String
+        var gameMode: UInt32
+        var displayName: String
+        var session: AkalabethSavedSession
     }
 
     private enum Keys {

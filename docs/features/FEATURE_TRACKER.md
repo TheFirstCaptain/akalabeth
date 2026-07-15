@@ -18,5 +18,5 @@
 | F-014 | Implemented | Applesoft compatibility pass |
 | F-015 | Implemented | Modern app UX layer |
 | F-016 | Implemented | Audio and feedback |
-| F-017 | Planned | Save format hardening |
-| F-018 | Planned | Packaging and release readiness |
+| F-017 | Implemented | Save format hardening |
+| F-018 | Implemented | Packaging and release readiness |

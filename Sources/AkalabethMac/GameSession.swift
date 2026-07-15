@@ -19,7 +19,7 @@ public enum AkalabethInput: Equatable, Sendable {
     case left
 }
 
-public enum AkalabethPrompt: Equatable, Sendable {
+public enum AkalabethPrompt: String, Codable, Equatable, Sendable {
     case none
     case attackWeapon
     case axeStyle
@@ -37,6 +37,101 @@ public enum AkalabethFeedback: Equatable, Sendable {
     case purchase
     case death
     case victory
+}
+
+public struct AkalabethSavedSession: Codable, Equatable, Sendable {
+    public var state: AkalabethSavedGameState
+    public var inputBuffer: String
+    public var statusLine: String
+    public var prompt: AkalabethPrompt
+
+    public init(
+        state: AkalabethSavedGameState,
+        inputBuffer: String = "",
+        statusLine: String = "",
+        prompt: AkalabethPrompt = .none
+    ) {
+        self.state = state
+        self.inputBuffer = inputBuffer
+        self.statusLine = statusLine
+        self.prompt = prompt
+    }
+}
+
+public struct AkalabethSavedGameState: Codable, Equatable, Sendable {
+    public var mode: UInt32
+    public var location: UInt32
+    public var facing: UInt32
+    public var playerClass: UInt32
+    public var luckyNumber: Int32
+    public var levelOfPlay: Int32
+    public var stats: [Int32]
+    public var inventory: [Int32]
+    public var overworld: [Int32]
+    public var dungeon: [Int32]
+    public var monsterActive: [Int32]
+    public var monsterX: [Int32]
+    public var monsterY: [Int32]
+    public var monsterHitPoints: [Int32]
+    public var overworldX: Int32
+    public var overworldY: Int32
+    public var dungeonX: Int32
+    public var dungeonY: Int32
+    public var dungeonLevel: Int32
+    public var questTarget: Int32
+    public var commandCount: Int32
+    public var randomState: UInt32
+    public var randomLastValue: Double
+
+    public init(
+        mode: UInt32,
+        location: UInt32,
+        facing: UInt32,
+        playerClass: UInt32,
+        luckyNumber: Int32,
+        levelOfPlay: Int32,
+        stats: [Int32],
+        inventory: [Int32],
+        overworld: [Int32],
+        dungeon: [Int32],
+        monsterActive: [Int32],
+        monsterX: [Int32],
+        monsterY: [Int32],
+        monsterHitPoints: [Int32],
+        overworldX: Int32,
+        overworldY: Int32,
+        dungeonX: Int32,
+        dungeonY: Int32,
+        dungeonLevel: Int32,
+        questTarget: Int32,
+        commandCount: Int32,
+        randomState: UInt32,
+        randomLastValue: Double
+    ) {
+        self.mode = mode
+        self.location = location
+        self.facing = facing
+        self.playerClass = playerClass
+        self.luckyNumber = luckyNumber
+        self.levelOfPlay = levelOfPlay
+        self.stats = stats
+        self.inventory = inventory
+        self.overworld = overworld
+        self.dungeon = dungeon
+        self.monsterActive = monsterActive
+        self.monsterX = monsterX
+        self.monsterY = monsterY
+        self.monsterHitPoints = monsterHitPoints
+        self.overworldX = overworldX
+        self.overworldY = overworldY
+        self.dungeonX = dungeonX
+        self.dungeonY = dungeonY
+        self.dungeonLevel = dungeonLevel
+        self.questTarget = questTarget
+        self.commandCount = commandCount
+        self.randomState = randomState
+        self.randomLastValue = randomLastValue
+    }
 }
 
 public final class GameSession {
@@ -61,26 +156,49 @@ public final class GameSession {
         self.prompt = prompt
     }
 
-    public convenience init?(snapshot: Data, inputBuffer: String = "", statusLine: String = "") {
-        guard snapshot.count == Self.snapshotByteCount else {
+    public convenience init?(savedSession: AkalabethSavedSession) {
+        guard let state = Self.restoreState(from: savedSession.state) else {
             return nil
         }
-
-        var restored = AkGameState()
-        _ = withUnsafeMutableBytes(of: &restored) { rawState in
-            snapshot.copyBytes(to: rawState)
-        }
-        self.init(state: restored, inputBuffer: inputBuffer, statusLine: statusLine)
+        self.init(
+            state: state,
+            inputBuffer: savedSession.inputBuffer,
+            statusLine: savedSession.statusLine,
+            prompt: savedSession.prompt
+        )
     }
 
-    public static var snapshotByteCount: Int {
-        MemoryLayout<AkGameState>.size
-    }
-
-    public func snapshot() -> Data {
-        withUnsafeBytes(of: state) { rawState in
-            Data(rawState)
-        }
+    public func savedSession() -> AkalabethSavedSession {
+        AkalabethSavedSession(
+            state: AkalabethSavedGameState(
+                mode: state.mode.rawValue,
+                location: state.location.rawValue,
+                facing: state.facing.rawValue,
+                playerClass: state.player_class.rawValue,
+                luckyNumber: state.lucky_number,
+                levelOfPlay: state.level_of_play,
+                stats: Self.flatten(&state.stats, count: Int(AK_GAME_STAT_COUNT)),
+                inventory: Self.flatten(&state.inventory, count: Int(AK_GAME_ITEM_COUNT)),
+                overworld: Self.flatten(&state.overworld, count: Int(AK_GAME_OVERWORLD_SIZE * AK_GAME_OVERWORLD_SIZE)),
+                dungeon: Self.flatten(&state.dungeon, count: Int(AK_GAME_DUNGEON_SIZE * AK_GAME_DUNGEON_SIZE)),
+                monsterActive: Self.flatten(&state.monster_active, count: Int(AK_GAME_MONSTER_COUNT + 1)),
+                monsterX: Self.flatten(&state.monster_x, count: Int(AK_GAME_MONSTER_COUNT + 1)),
+                monsterY: Self.flatten(&state.monster_y, count: Int(AK_GAME_MONSTER_COUNT + 1)),
+                monsterHitPoints: Self.flatten(&state.monster_hit_points, count: Int(AK_GAME_MONSTER_COUNT + 1)),
+                overworldX: state.overworld_x,
+                overworldY: state.overworld_y,
+                dungeonX: state.dungeon_x,
+                dungeonY: state.dungeon_y,
+                dungeonLevel: state.dungeon_level,
+                questTarget: state.quest_target,
+                commandCount: state.command_count,
+                randomState: state.random.state,
+                randomLastValue: state.random.last_value
+            ),
+            inputBuffer: inputBuffer,
+            statusLine: statusLine,
+            prompt: prompt
+        )
     }
 
     public func reset(fixture: AkalabethFixture = .normal) {
@@ -481,6 +599,74 @@ public final class GameSession {
             command == AK_GAME_COMMAND_TURN_AROUND ||
             command == AK_GAME_COMMAND_ENTER ||
             command == AK_GAME_COMMAND_EXIT
+    }
+
+    private static func flatten<T>(_ value: inout T, count: Int) -> [Int32] {
+        withUnsafePointer(to: &value) { pointer in
+            pointer.withMemoryRebound(to: Int32.self, capacity: count) { cells in
+                Array(UnsafeBufferPointer(start: cells, count: count))
+            }
+        }
+    }
+
+    private static func restoreState(from saved: AkalabethSavedGameState) -> AkGameState? {
+        let monsterSlots = Int(AK_GAME_MONSTER_COUNT + 1)
+        guard saved.stats.count == Int(AK_GAME_STAT_COUNT),
+              saved.inventory.count == Int(AK_GAME_ITEM_COUNT),
+              saved.overworld.count == Int(AK_GAME_OVERWORLD_SIZE * AK_GAME_OVERWORLD_SIZE),
+              saved.dungeon.count == Int(AK_GAME_DUNGEON_SIZE * AK_GAME_DUNGEON_SIZE),
+              saved.monsterActive.count == monsterSlots,
+              saved.monsterX.count == monsterSlots,
+              saved.monsterY.count == monsterSlots,
+              saved.monsterHitPoints.count == monsterSlots,
+              saved.mode <= AK_GAME_MODE_VICTORY.rawValue,
+              saved.location <= AK_GAME_LOCATION_DEATH.rawValue,
+              saved.facing <= AK_GAME_DIRECTION_WEST.rawValue,
+              saved.playerClass <= AK_GAME_CLASS_MAGE.rawValue
+        else {
+            return nil
+        }
+
+        let mode = AkGameMode(rawValue: saved.mode)
+        let location = AkGameLocation(rawValue: saved.location)
+        let facing = AkGameDirection(rawValue: saved.facing)
+        let playerClass = AkGameClass(rawValue: saved.playerClass)
+        var restored = AkGameState()
+        ak_game_init(&restored)
+        restored.mode = mode
+        restored.location = location
+        restored.facing = facing
+        restored.player_class = playerClass
+        restored.lucky_number = saved.luckyNumber
+        restored.level_of_play = saved.levelOfPlay
+        restore(saved.stats, into: &restored.stats)
+        restore(saved.inventory, into: &restored.inventory)
+        restore(saved.overworld, into: &restored.overworld)
+        restore(saved.dungeon, into: &restored.dungeon)
+        restore(saved.monsterActive, into: &restored.monster_active)
+        restore(saved.monsterX, into: &restored.monster_x)
+        restore(saved.monsterY, into: &restored.monster_y)
+        restore(saved.monsterHitPoints, into: &restored.monster_hit_points)
+        restored.overworld_x = saved.overworldX
+        restored.overworld_y = saved.overworldY
+        restored.dungeon_x = saved.dungeonX
+        restored.dungeon_y = saved.dungeonY
+        restored.dungeon_level = saved.dungeonLevel
+        restored.quest_target = saved.questTarget
+        restored.command_count = saved.commandCount
+        restored.random.state = saved.randomState
+        restored.random.last_value = saved.randomLastValue
+        return restored
+    }
+
+    private static func restore<T>(_ values: [Int32], into value: inout T) {
+        withUnsafeMutablePointer(to: &value) { pointer in
+            pointer.withMemoryRebound(to: Int32.self, capacity: values.count) { cells in
+                for index in values.indices {
+                    cells[index] = values[index]
+                }
+            }
+        }
     }
 
     private func seedCharacter() {
