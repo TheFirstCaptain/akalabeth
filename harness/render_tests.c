@@ -37,6 +37,20 @@ static int has_text(const AkRenderCommandBuffer *buffer, AkRenderCommandType typ
     return 0;
 }
 
+static int has_text_at(const AkRenderCommandBuffer *buffer, AkRenderCommandType type, const char *text, int x, int y) {
+    size_t i;
+
+    for (i = 0; i < buffer->count; i++) {
+        if (buffer->commands[i].type == type &&
+            buffer->commands[i].x == x &&
+            buffer->commands[i].y == y &&
+            strcmp(buffer->commands[i].text, text) == 0) {
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static int has_status(const AkRenderCommandBuffer *buffer, const char *label, int value) {
     size_t i;
 
@@ -112,6 +126,9 @@ static void test_town_screen_contains_store_tables(void) {
     assert(has_text(&buffer, AK_RENDER_COMMAND_TEXT, "     STAT'S              WEAPONS"));
     assert(has_status(&buffer, "GOLD...........", 15));
     assert(has_status(&buffer, "magic_amulet", 1));
+    assert(has_text_at(&buffer, AK_RENDER_COMMAND_TEXT, "food", 25, 19));
+    assert(has_text_at(&buffer, AK_RENDER_COMMAND_TEXT, "rapier", 25, 20));
+    assert(has_text_at(&buffer, AK_RENDER_COMMAND_TEXT, "magic_amulet", 25, 24));
     assert(has_text(&buffer, AK_RENDER_COMMAND_PROMPT, "WELCOME TO THE ADVENTURE SHOP"));
     assert(has_text(&buffer, AK_RENDER_COMMAND_PROMPT, "WHICH ITEM SHALT THOU BUY"));
 }

@@ -164,6 +164,9 @@ static void render_town(const AkGameState *state, AkRenderCommandBuffer *buffer)
     append_text(buffer, 5, 17, "PRICE", 0);
     append_text(buffer, 15, 17, "DAMAGE", 0);
     append_text(buffer, 25, 17, "ITEM", 0);
+    for (i = 0; i < AK_GAME_ITEM_COUNT; i++) {
+        append_text(buffer, 25, 19 + i, ak_game_item_name((AkGameItem)i), 0);
+    }
     append_text(buffer, 5, 19, "1 FOR 10", 0);
     append_text(buffer, 15, 19, "N/A", 0);
     append_text(buffer, 5, 20, "8", 0);

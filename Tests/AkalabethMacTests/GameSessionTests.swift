@@ -92,6 +92,15 @@ import Foundation
     #expect(session.state.quest_target > 0)
 }
 
+@Test func spaceAcknowledgesQuestPrompt() {
+    let session = GameSession(fixture: .quest)
+    let wisdomBefore = session.state.stats.4
+
+    #expect(session.handle(.character(" ")) == AK_GAME_RESULT_OK)
+    #expect(session.statusLine == "")
+    #expect(session.state.stats.4 == wisdomBefore + 1)
+}
+
 @Test func renderBufferAvailableForAppShell() {
     let session = GameSession(fixture: .quest)
     let buffer = session.renderCommands()

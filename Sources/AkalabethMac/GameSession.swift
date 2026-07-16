@@ -292,6 +292,11 @@ public final class GameSession {
             return AK_GAME_RESULT_OK
         }
 
+        if character == " " &&
+            (state.mode == AK_GAME_MODE_QUEST || state.mode == AK_GAME_MODE_VICTORY || state.mode == AK_GAME_MODE_DEATH) {
+            return applySimpleCommand(AK_GAME_COMMAND_ACKNOWLEDGE)
+        }
+
         switch character {
         case "Y":
             return applySimpleCommand(AK_GAME_COMMAND_ACCEPT_CHARACTER)
