@@ -79,6 +79,7 @@ public struct AkalabethSavedGameState: Codable, Equatable, Sendable {
     public var dungeonX: Int32
     public var dungeonY: Int32
     public var dungeonLevel: Int32
+    public var dungeonHitPointReward: Int32?
     public var questTarget: Int32
     public var commandCount: Int32
     public var randomState: UInt32
@@ -105,6 +106,7 @@ public struct AkalabethSavedGameState: Codable, Equatable, Sendable {
         dungeonX: Int32,
         dungeonY: Int32,
         dungeonLevel: Int32,
+        dungeonHitPointReward: Int32? = nil,
         questTarget: Int32,
         commandCount: Int32,
         randomState: UInt32,
@@ -130,6 +132,7 @@ public struct AkalabethSavedGameState: Codable, Equatable, Sendable {
         self.dungeonX = dungeonX
         self.dungeonY = dungeonY
         self.dungeonLevel = dungeonLevel
+        self.dungeonHitPointReward = dungeonHitPointReward
         self.questTarget = questTarget
         self.commandCount = commandCount
         self.randomState = randomState
@@ -194,6 +197,7 @@ public final class GameSession {
                 dungeonX: state.dungeon_x,
                 dungeonY: state.dungeon_y,
                 dungeonLevel: state.dungeon_level,
+                dungeonHitPointReward: state.dungeon_hit_point_reward,
                 questTarget: state.quest_target,
                 commandCount: state.command_count,
                 randomState: state.random.state,
@@ -256,8 +260,8 @@ public final class GameSession {
     }
 
     @discardableResult
-    public func attack(with item: AkGameItem) -> AkGameResultCode {
-        var command = AkGameCommand(type: AK_GAME_COMMAND_ATTACK, value: 0, item: item, player_class: AK_GAME_CLASS_NONE)
+    public func attack(with item: AkGameItem, style: AkGameAttackStyle = AK_GAME_ATTACK_STYLE_MELEE) -> AkGameResultCode {
+        var command = AkGameCommand(type: AK_GAME_COMMAND_ATTACK, value: Int32(style.rawValue), item: item, player_class: AK_GAME_CLASS_NONE)
         let code = applyCoreCommand(&command)
         prompt = .none
         statusLine = status(for: code)
@@ -478,20 +482,17 @@ public final class GameSession {
             }
             return castMagic(choice: 1)
         default:
-            statusLine = "WHICH WEAPON"
-            return AK_GAME_RESULT_INVALID_COMMAND
+            let code = attack(with: AK_GAME_ITEM_FOOD)
+            if code == AK_GAME_RESULT_OK {
+                statusLine = "HANDS"
+            }
+            return code
         }
     }
 
     private func handleAxeStyle(_ character: Character) -> AkGameResultCode {
         if character == "T" {
-            if state.inventory.2 < 1 {
-                prompt = .attackWeapon
-                statusLine = "NOT OWNED"
-                return AK_GAME_RESULT_REJECTED
-            }
-            state.inventory.2 -= 1
-            return attack(with: AK_GAME_ITEM_BOW)
+            return attack(with: AK_GAME_ITEM_AXE, style: AK_GAME_ATTACK_STYLE_THROWN)
         }
         return attack(with: pendingAttackItem)
     }
@@ -662,6 +663,7 @@ public final class GameSession {
         restored.dungeon_x = saved.dungeonX
         restored.dungeon_y = saved.dungeonY
         restored.dungeon_level = saved.dungeonLevel
+        restored.dungeon_hit_point_reward = saved.dungeonHitPointReward ?? 0
         restored.quest_target = saved.questTarget
         restored.command_count = saved.commandCount
         restored.random.state = saved.randomState

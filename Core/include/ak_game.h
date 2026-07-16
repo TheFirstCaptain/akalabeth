@@ -71,6 +71,11 @@ typedef enum {
 } AkGameItem;
 
 typedef enum {
+    AK_GAME_ATTACK_STYLE_MELEE = 0,
+    AK_GAME_ATTACK_STYLE_THROWN = 1
+} AkGameAttackStyle;
+
+typedef enum {
     AK_GAME_TILE_OPEN = 0,
     AK_GAME_TILE_MOUNTAIN = 1,
     AK_GAME_TILE_FIELD = 2,
@@ -177,6 +182,7 @@ typedef struct {
     int dungeon_x;
     int dungeon_y;
     int dungeon_level;
+    int dungeon_hit_point_reward;
     int quest_target;
     int command_count;
     AkRandom random;

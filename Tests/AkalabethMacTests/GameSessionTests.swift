@@ -64,6 +64,47 @@ import Foundation
     #expect(session.prompt == .none)
 }
 
+@Test func thrownAxeDoesNotRequireBowAndConsumesAxe() {
+    var state = GameSession(fixture: .dungeon).state
+    state.inventory.2 = 1
+    state.inventory.4 = 0
+    state.stats.1 = 50
+    state.stats.2 = 100
+    state.monster_active.1 = 1
+    state.monster_x.1 = 8
+    state.monster_y.1 = 5
+    state.monster_hit_points.1 = 1
+    let session = GameSession(state: state)
+
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .attackWeapon)
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .axeStyle)
+    #expect(session.handle(.character("T")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .none)
+    #expect(session.state.inventory.2 == 0)
+    #expect(session.state.inventory.4 == 0)
+    #expect(session.state.monster_active.1 == 0)
+}
+
+@Test func unrecognizedAttackPromptChoiceUsesBareHands() {
+    var state = GameSession(fixture: .dungeon).state
+    state.stats.1 = 50
+    state.stats.2 = 100
+    state.monster_active.1 = 1
+    state.monster_x.1 = 6
+    state.monster_y.1 = 5
+    state.monster_hit_points.1 = 10
+    let session = GameSession(state: state)
+
+    #expect(session.handle(.character("A")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .attackWeapon)
+    #expect(session.handle(.character("X")) == AK_GAME_RESULT_OK)
+    #expect(session.prompt == .none)
+    #expect(session.statusLine == "HANDS")
+    #expect(session.state.monster_active.1 == 0)
+}
+
 @Test func mageMagicAsksForChoice() {
     var state = GameSession(fixture: .dungeon).state
     state.player_class = AK_GAME_CLASS_MAGE
@@ -94,11 +135,21 @@ import Foundation
 
 @Test func spaceAcknowledgesQuestPrompt() {
     let session = GameSession(fixture: .quest)
+    let hitPointsBefore = session.state.stats.0
+    let strengthBefore = session.state.stats.1
+    let dexterityBefore = session.state.stats.2
+    let staminaBefore = session.state.stats.3
     let wisdomBefore = session.state.stats.4
+    let goldBefore = session.state.stats.5
 
     #expect(session.handle(.character(" ")) == AK_GAME_RESULT_OK)
     #expect(session.statusLine == "")
-    #expect(session.state.stats.4 == wisdomBefore + 1)
+    #expect(session.state.stats.0 == hitPointsBefore)
+    #expect(session.state.stats.1 == strengthBefore)
+    #expect(session.state.stats.2 == dexterityBefore)
+    #expect(session.state.stats.3 == staminaBefore)
+    #expect(session.state.stats.4 == wisdomBefore)
+    #expect(session.state.stats.5 == goldBefore)
 }
 
 @Test func renderBufferAvailableForAppShell() {
@@ -190,10 +241,12 @@ import Foundation
     var fractionalFoodState = GameSession(fixture: .dungeon).state
     fractionalFoodState.inventory.0 = 9
     fractionalFoodState.food_tenths = 99
+    fractionalFoodState.dungeon_hit_point_reward = 7
     try persistence.saveSession(GameSession(state: fractionalFoodState))
     let fractionalFood = try #require(try persistence.resumeSession())
     #expect(fractionalFood.state.inventory.0 == 9)
     #expect(fractionalFood.state.food_tenths == 99)
+    #expect(fractionalFood.state.dungeon_hit_point_reward == 7)
 
     try persistence.deleteSave()
     #expect(try persistence.resumeSession() == nil)
@@ -275,6 +328,7 @@ import Foundation
         #expect(resumed.state.overworld_y == session.state.overworld_y)
         #expect(resumed.state.dungeon_x == session.state.dungeon_x)
         #expect(resumed.state.dungeon_y == session.state.dungeon_y)
+        #expect(resumed.state.dungeon_hit_point_reward == session.state.dungeon_hit_point_reward)
         #expect(resumed.state.quest_target == session.state.quest_target)
     }
 }

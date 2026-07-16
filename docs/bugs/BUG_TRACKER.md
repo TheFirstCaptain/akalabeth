@@ -7,7 +7,7 @@ These bugs track known differences between the modern app/core behavior and the 
 | [B-001](B-001.md) | Fixed | High | Dungeon attacks and magic skip the post-command monster-turn path |
 | [B-002](B-002.md) | Fixed | High | Dungeon turns do not consume fractional food |
 | [B-003](B-003.md) | Fixed | High | Exiting town regenerates the overworld |
-| [B-004](B-004.md) | Open | Medium | Active quest reminders incorrectly increase every stat |
-| [B-005](B-005.md) | Open | Medium | Thrown axes are resolved as bow attacks |
-| [B-006](B-006.md) | Open | Medium | Bare-hands attack is not reachable from the app prompt |
-| [B-007](B-007.md) | Open | Medium | Dungeon kill hit-point reward is not awarded on dungeon exit |
+| [B-004](B-004.md) | Fixed | Medium | Active quest reminders incorrectly increase every stat |
+| [B-005](B-005.md) | Fixed | Medium | Thrown axes are resolved as bow attacks |
+| [B-006](B-006.md) | Fixed | Medium | Bare-hands attack is not reachable from the app prompt |
+| [B-007](B-007.md) | Fixed | Medium | Dungeon kill hit-point reward is not awarded on dungeon exit |

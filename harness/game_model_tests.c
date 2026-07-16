@@ -35,6 +35,12 @@ static AkGameCommand attack_command(AkGameItem item) {
     return command;
 }
 
+static AkGameCommand thrown_attack_command(AkGameItem item) {
+    AkGameCommand command = attack_command(item);
+    command.value = AK_GAME_ATTACK_STYLE_THROWN;
+    return command;
+}
+
 static AkGameCommand magic_command(int choice) {
     AkGameCommand command;
     memset(&command, 0, sizeof(command));
@@ -558,6 +564,22 @@ static void test_dungeon_ladder_transitions(void) {
     state.mode = AK_GAME_MODE_DUNGEON;
     state.location = AK_GAME_LOCATION_DUNGEON;
     state.dungeon_level = 1;
+    state.dungeon_x = 1;
+    state.dungeon_y = 1;
+    state.stats[AK_GAME_STAT_HIT_POINTS] = 20;
+    state.dungeon_hit_point_reward = 7;
+    give_food(&state, 10);
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.dungeon[1][1] = AK_GAME_DUNGEON_LADDER_UP;
+
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.mode == AK_GAME_MODE_OVERWORLD);
+    assert(state.stats[AK_GAME_STAT_HIT_POINTS] == 27);
+    assert(state.dungeon_hit_point_reward == 0);
+
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.dungeon_level = 1;
     state.dungeon_x = 3;
     state.dungeon_y = 3;
     state.lucky_number = 1234;
@@ -792,7 +814,84 @@ static void test_player_attack_miss_hit_and_kill(void) {
     assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
     assert(state.monster_active[1] == 0);
     assert(state.stats[AK_GAME_STAT_GOLD] >= 2);
+    assert(state.dungeon_hit_point_reward == 0);
     assert(state.quest_target == -1);
+
+    state.dungeon_level = 5;
+    state.monster_active[3] = 1;
+    state.monster_x[3] = 6;
+    state.monster_y[3] = 5;
+    state.monster_hit_points[3] = 1;
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_active[3] == 0);
+    assert(state.dungeon_hit_point_reward == 7);
+}
+
+static void test_thrown_axe_uses_axe_inventory_range_and_damage(void) {
+    AkGameState state;
+    AkGameCommandResult result;
+    AkGameCommand command;
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.player_class = AK_GAME_CLASS_FIGHTER;
+    state.facing = AK_GAME_DIRECTION_EAST;
+    state.dungeon_level = 1;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    state.stats[AK_GAME_STAT_HIT_POINTS] = 100;
+    state.stats[AK_GAME_STAT_DEXTERITY] = 100;
+    state.stats[AK_GAME_STAT_STAMINA] = 100;
+    state.stats[AK_GAME_STAT_STRENGTH] = 0;
+    state.random.state = 8;
+    give_food(&state, 10);
+    state.inventory[AK_GAME_ITEM_AXE] = 1;
+    state.inventory[AK_GAME_ITEM_BOW] = 0;
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.monster_active[4] = 1;
+    state.monster_x[4] = 8;
+    state.monster_y[4] = 5;
+    state.monster_hit_points[4] = 4;
+
+    command = thrown_attack_command(AK_GAME_ITEM_AXE);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.inventory[AK_GAME_ITEM_AXE] == 0);
+    assert(state.inventory[AK_GAME_ITEM_BOW] == 0);
+    assert(state.monster_active[4] == 0);
+}
+
+static void test_bare_hands_attack_misses_and_hits_with_strength_damage(void) {
+    AkGameState state;
+    AkGameCommandResult result;
+    AkGameCommand command;
+
+    ak_game_init(&state);
+    state.mode = AK_GAME_MODE_DUNGEON;
+    state.location = AK_GAME_LOCATION_DUNGEON;
+    state.player_class = AK_GAME_CLASS_FIGHTER;
+    state.facing = AK_GAME_DIRECTION_EAST;
+    state.dungeon_level = 1;
+    state.dungeon_x = 5;
+    state.dungeon_y = 5;
+    state.stats[AK_GAME_STAT_HIT_POINTS] = 100;
+    state.stats[AK_GAME_STAT_DEXTERITY] = 0;
+    state.stats[AK_GAME_STAT_STAMINA] = 100;
+    state.stats[AK_GAME_STAT_STRENGTH] = 50;
+    give_food(&state, 10);
+    fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
+    state.monster_active[1] = 1;
+    state.monster_x[1] = 6;
+    state.monster_y[1] = 5;
+    state.monster_hit_points[1] = 10;
+
+    command = attack_command(AK_GAME_ITEM_FOOD);
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_hit_points[1] == 10);
+
+    state.stats[AK_GAME_STAT_DEXTERITY] = 100;
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.monster_active[1] == 0);
 }
 
 static void test_player_attack_runs_dungeon_monster_turn(void) {
@@ -918,14 +1017,23 @@ static void test_lord_british_quest_progression_and_victory(void) {
     assert(state.stats[AK_GAME_STAT_WISDOM] == 10);
     assert(state.stats[AK_GAME_STAT_HIT_POINTS] == 21);
 
+    assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
+    assert(state.quest_target == 3);
+    assert(state.stats[AK_GAME_STAT_WISDOM] == 10);
+    assert(state.stats[AK_GAME_STAT_HIT_POINTS] == 21);
+
     state.quest_target = -3;
     assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
     assert(state.quest_target == 4);
+    assert(state.stats[AK_GAME_STAT_WISDOM] == 11);
+    assert(state.stats[AK_GAME_STAT_HIT_POINTS] == 22);
 
     state.quest_target = -10;
     assert(ak_game_apply_command(&state, &command, &result) == AK_GAME_RESULT_OK);
     assert(state.mode == AK_GAME_MODE_VICTORY);
     assert(state.quest_target == 0);
+    assert(state.stats[AK_GAME_STAT_WISDOM] == 12);
+    assert(state.stats[AK_GAME_STAT_HIT_POINTS] == 23);
 }
 
 static void test_store_purchase_rules(void) {
@@ -1163,6 +1271,8 @@ int main(void) {
     test_dungeon_commands_consume_fractional_food();
     test_dungeon_fractional_food_starvation_enters_death_state();
     test_player_attack_miss_hit_and_kill();
+    test_thrown_axe_uses_axe_inventory_range_and_damage();
+    test_bare_hands_attack_misses_and_hits_with_strength_damage();
     test_player_attack_runs_dungeon_monster_turn();
     test_magic_amulet_ladders_attack_and_backfire();
     test_magic_runs_dungeon_monster_turn();

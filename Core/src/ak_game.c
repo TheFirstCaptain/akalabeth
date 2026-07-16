@@ -621,6 +621,7 @@ static void kill_monster(AkGameState *state, int monster) {
     int reward = monster + state->dungeon_level;
 
     state->stats[AK_GAME_STAT_GOLD] += reward;
+    state->dungeon_hit_point_reward += monster * state->dungeon_level / 2;
     state->monster_active[monster] = 0;
     state->monster_hit_points[monster] = 0;
     state->dungeon[state->monster_x[monster]][state->monster_y[monster]] = AK_GAME_DUNGEON_OPEN;
@@ -635,6 +636,7 @@ static AkGameResultCode apply_attack(
     AkGameCommandResult *result
 ) {
     AkGameItem item = command->item;
+    int thrown_axe;
     int damage_base;
     int ranged;
     int monster;
@@ -648,6 +650,7 @@ static AkGameResultCode apply_attack(
         item = AK_GAME_ITEM_FOOD;
     }
 
+    thrown_axe = item == AK_GAME_ITEM_AXE && command->value == AK_GAME_ATTACK_STYLE_THROWN;
     damage_base = weapon_damage_base(item);
     if (is_weapon_item(item)) {
         if (state->inventory[item] < 1) {
@@ -660,12 +663,15 @@ static AkGameResultCode apply_attack(
         }
     }
 
-    ranged = item == AK_GAME_ITEM_BOW;
+    ranged = item == AK_GAME_ITEM_BOW || thrown_axe;
     monster = find_attack_target(state, ranged);
     hit_roll = (double)state->stats[AK_GAME_STAT_DEXTERITY] -
         ak_random_rnd(&state->random, 1.0) * 25.0;
 
     state->command_count++;
+    if (thrown_axe) {
+        state->inventory[AK_GAME_ITEM_AXE]--;
+    }
     push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, AK_GAME_COMMAND_ATTACK, item);
 
     if (monster < 1 || hit_roll < (double)(monster + state->dungeon_level)) {
@@ -773,6 +779,7 @@ static AkGameResultCode apply_magic(
 
 static void apply_quest_acknowledgement(AkGameState *state, AkGameCommandResult *result, AkGameCommandType command) {
     int i;
+    int award_stats = 0;
 
     if (state->quest_target == 0) {
         state->quest_target = state->stats[AK_GAME_STAT_WISDOM] / 3;
@@ -782,6 +789,7 @@ static void apply_quest_acknowledgement(AkGameState *state, AkGameCommandResult 
         if (state->quest_target > AK_GAME_MONSTER_COUNT) {
             state->quest_target = AK_GAME_MONSTER_COUNT;
         }
+        award_stats = 1;
     } else if (state->quest_target < 0) {
         if (-state->quest_target >= AK_GAME_MONSTER_COUNT) {
             set_mode(state, result, AK_GAME_MODE_VICTORY, command);
@@ -789,10 +797,13 @@ static void apply_quest_acknowledgement(AkGameState *state, AkGameCommandResult 
         } else {
             state->quest_target = -state->quest_target + 1;
         }
+        award_stats = 1;
     }
 
-    for (i = 0; i < AK_GAME_STAT_COUNT; i++) {
-        state->stats[i]++;
+    if (award_stats) {
+        for (i = 0; i < AK_GAME_STAT_COUNT; i++) {
+            state->stats[i]++;
+        }
     }
     push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, state->quest_target);
 }
@@ -1005,6 +1016,8 @@ AkGameResultCode ak_game_apply_command(
 
             state->command_count++;
             if (dungeon_tile == AK_GAME_DUNGEON_LADDER_UP && state->dungeon_level == 1) {
+                state->stats[AK_GAME_STAT_HIT_POINTS] += state->dungeon_hit_point_reward;
+                state->dungeon_hit_point_reward = 0;
                 set_mode(state, result, AK_GAME_MODE_OVERWORLD, type);
                 set_location(state, result, AK_GAME_LOCATION_OVERWORLD, type);
                 push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, dungeon_tile);
