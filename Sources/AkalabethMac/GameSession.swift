@@ -67,6 +67,7 @@ public struct AkalabethSavedGameState: Codable, Equatable, Sendable {
     public var levelOfPlay: Int32
     public var stats: [Int32]
     public var inventory: [Int32]
+    public var foodTenths: Int32?
     public var overworld: [Int32]
     public var dungeon: [Int32]
     public var monsterActive: [Int32]
@@ -92,6 +93,7 @@ public struct AkalabethSavedGameState: Codable, Equatable, Sendable {
         levelOfPlay: Int32,
         stats: [Int32],
         inventory: [Int32],
+        foodTenths: Int32? = nil,
         overworld: [Int32],
         dungeon: [Int32],
         monsterActive: [Int32],
@@ -116,6 +118,7 @@ public struct AkalabethSavedGameState: Codable, Equatable, Sendable {
         self.levelOfPlay = levelOfPlay
         self.stats = stats
         self.inventory = inventory
+        self.foodTenths = foodTenths
         self.overworld = overworld
         self.dungeon = dungeon
         self.monsterActive = monsterActive
@@ -179,6 +182,7 @@ public final class GameSession {
                 levelOfPlay: state.level_of_play,
                 stats: Self.flatten(&state.stats, count: Int(AK_GAME_STAT_COUNT)),
                 inventory: Self.flatten(&state.inventory, count: Int(AK_GAME_ITEM_COUNT)),
+                foodTenths: state.food_tenths,
                 overworld: Self.flatten(&state.overworld, count: Int(AK_GAME_OVERWORLD_SIZE * AK_GAME_OVERWORLD_SIZE)),
                 dungeon: Self.flatten(&state.dungeon, count: Int(AK_GAME_DUNGEON_SIZE * AK_GAME_DUNGEON_SIZE)),
                 monsterActive: Self.flatten(&state.monster_active, count: Int(AK_GAME_MONSTER_COUNT + 1)),
@@ -646,6 +650,7 @@ public final class GameSession {
         restored.level_of_play = saved.levelOfPlay
         restore(saved.stats, into: &restored.stats)
         restore(saved.inventory, into: &restored.inventory)
+        restored.food_tenths = saved.foodTenths ?? restored.inventory.0 * 10
         restore(saved.overworld, into: &restored.overworld)
         restore(saved.dungeon, into: &restored.dungeon)
         restore(saved.monsterActive, into: &restored.monster_active)

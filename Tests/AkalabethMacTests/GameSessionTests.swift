@@ -187,6 +187,14 @@ import Foundation
     #expect(resumed.state.mode == AK_GAME_MODE_QUEST)
     #expect(resumed.state.quest_target == session.state.quest_target)
 
+    var fractionalFoodState = GameSession(fixture: .dungeon).state
+    fractionalFoodState.inventory.0 = 9
+    fractionalFoodState.food_tenths = 99
+    try persistence.saveSession(GameSession(state: fractionalFoodState))
+    let fractionalFood = try #require(try persistence.resumeSession())
+    #expect(fractionalFood.state.inventory.0 == 9)
+    #expect(fractionalFood.state.food_tenths == 99)
+
     try persistence.deleteSave()
     #expect(try persistence.resumeSession() == nil)
 }

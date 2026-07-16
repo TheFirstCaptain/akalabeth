@@ -125,8 +125,35 @@ static void append_monster(AkRenderCommandBuffer *buffer, int monster, int x, in
     }
 }
 
+static int whole_food_from_tenths(int food_tenths) {
+    if (food_tenths < 0) {
+        return -1;
+    }
+    return food_tenths / 10;
+}
+
+static int effective_food_tenths(const AkGameState *state) {
+    int whole_food = whole_food_from_tenths(state->food_tenths);
+    if (state->inventory[AK_GAME_ITEM_FOOD] != whole_food) {
+        return state->inventory[AK_GAME_ITEM_FOOD] * 10;
+    }
+    return state->food_tenths;
+}
+
+static void append_food_status(const AkGameState *state, AkRenderCommandBuffer *buffer, int x, int y) {
+    char text[AK_RENDER_TEXT_SIZE];
+    int food_tenths = effective_food_tenths(state);
+
+    if (food_tenths >= 0 && food_tenths % 10 != 0) {
+        snprintf(text, sizeof(text), "FOOD=%d.%d", food_tenths / 10, food_tenths % 10);
+    } else {
+        snprintf(text, sizeof(text), "FOOD=%d", whole_food_from_tenths(food_tenths));
+    }
+    append_text(buffer, x, y, text, 0);
+}
+
 static void append_main_status(const AkGameState *state, AkRenderCommandBuffer *buffer) {
-    append_status(buffer, 30, 22, "FOOD", state->inventory[AK_GAME_ITEM_FOOD]);
+    append_food_status(state, buffer, 30, 22);
     append_status(buffer, 30, 23, "H.P.", state->stats[AK_GAME_STAT_HIT_POINTS]);
     append_status(buffer, 30, 24, "GOLD", state->stats[AK_GAME_STAT_GOLD]);
 }

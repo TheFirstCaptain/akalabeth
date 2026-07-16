@@ -152,7 +152,7 @@ static void test_overworld_screen_emits_hires_tiles_status_and_prompt(void) {
     assert(buffer.commands[0].mode == AK_RENDER_MODE_HIRES);
     assert(has_tile(&buffer, AK_GAME_TILE_TOWN, "town"));
     assert(has_tile(&buffer, AK_GAME_TILE_DUNGEON, "dungeon"));
-    assert(has_status(&buffer, "FOOD", 9));
+    assert(has_text_at(&buffer, AK_RENDER_COMMAND_TEXT, "FOOD=9", 30, 22));
     assert(has_status(&buffer, "H.P.", 20));
     assert(has_text(&buffer, AK_RENDER_COMMAND_PROMPT, "COMMAND?"));
 }
@@ -167,6 +167,8 @@ static void test_dungeon_screen_emits_lines_encounter_and_monster(void) {
     state.facing = AK_GAME_DIRECTION_EAST;
     state.dungeon_x = 5;
     state.dungeon_y = 5;
+    state.inventory[AK_GAME_ITEM_FOOD] = 9;
+    state.food_tenths = 99;
     fill_dungeon(&state, AK_GAME_DUNGEON_OPEN);
     state.dungeon[6][5] = AK_GAME_DUNGEON_CHEST;
     state.monster_active[10] = 1;
@@ -179,6 +181,7 @@ static void test_dungeon_screen_emits_lines_encounter_and_monster(void) {
     assert(count_commands(&buffer, AK_RENDER_COMMAND_LINE) > 10);
     assert(has_text(&buffer, AK_RENDER_COMMAND_CREATURE, "balrog"));
     assert(has_text(&buffer, AK_RENDER_COMMAND_TEXT, "CHEST"));
+    assert(has_text_at(&buffer, AK_RENDER_COMMAND_TEXT, "FOOD=9.9", 30, 22));
 }
 
 static void test_quest_and_victory_text_contracts(void) {

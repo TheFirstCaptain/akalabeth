@@ -165,6 +165,7 @@ typedef struct {
     int level_of_play;
     int stats[AK_GAME_STAT_COUNT];
     int inventory[AK_GAME_ITEM_COUNT];
+    int food_tenths;
     int overworld[AK_GAME_OVERWORLD_SIZE][AK_GAME_OVERWORLD_SIZE];
     int dungeon[AK_GAME_DUNGEON_SIZE][AK_GAME_DUNGEON_SIZE];
     int monster_active[AK_GAME_MONSTER_COUNT + 1];

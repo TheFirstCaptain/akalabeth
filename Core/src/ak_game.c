@@ -122,11 +122,29 @@ static void generate_character_qualities(AkGameState *state) {
 static void apply_purchase(AkGameState *state, AkGameItem item) {
     if (item == AK_GAME_ITEM_FOOD) {
         state->inventory[item] += 10;
+        state->food_tenths += 100;
     } else {
         state->inventory[item]++;
     }
 
     state->stats[AK_GAME_STAT_GOLD] -= AK_GAME_ITEM_PRICES[item];
+}
+
+static int whole_food_from_tenths(int food_tenths) {
+    if (food_tenths < 0) {
+        return -1;
+    }
+    return food_tenths / 10;
+}
+
+static void sync_food_from_inventory(AkGameState *state) {
+    if (state->inventory[AK_GAME_ITEM_FOOD] != whole_food_from_tenths(state->food_tenths)) {
+        state->food_tenths = state->inventory[AK_GAME_ITEM_FOOD] * 10;
+    }
+}
+
+static void sync_inventory_from_food(AkGameState *state) {
+    state->inventory[AK_GAME_ITEM_FOOD] = whole_food_from_tenths(state->food_tenths);
 }
 
 static int overworld_tile_at(const AkGameState *state, int x, int y) {
@@ -176,16 +194,43 @@ static void generate_overworld(AkGameState *state) {
 }
 
 static void consume_overworld_food(AkGameState *state) {
-    state->inventory[AK_GAME_ITEM_FOOD]--;
-    if (state->inventory[AK_GAME_ITEM_FOOD] < 0) {
+    state->food_tenths -= 10;
+    sync_inventory_from_food(state);
+    if (state->food_tenths < 0) {
         state->stats[AK_GAME_STAT_HIT_POINTS] = 0;
         state->mode = AK_GAME_MODE_DEATH;
         state->location = AK_GAME_LOCATION_DEATH;
     }
 }
 
-static void enter_overworld(AkGameState *state, AkGameCommandResult *result, AkGameCommandType command) {
-    generate_overworld(state);
+static void consume_dungeon_food(AkGameState *state) {
+    state->food_tenths -= 1;
+    sync_inventory_from_food(state);
+    if (state->food_tenths < 0) {
+        state->stats[AK_GAME_STAT_HIT_POINTS] = 0;
+        state->mode = AK_GAME_MODE_DEATH;
+        state->location = AK_GAME_LOCATION_DEATH;
+    }
+}
+
+static int has_generated_overworld(const AkGameState *state) {
+    int x;
+    int y;
+
+    for (x = 0; x < AK_GAME_OVERWORLD_SIZE; x++) {
+        for (y = 0; y < AK_GAME_OVERWORLD_SIZE; y++) {
+            if (state->overworld[x][y] != AK_GAME_TILE_OPEN) {
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+static void return_to_overworld(AkGameState *state, AkGameCommandResult *result, AkGameCommandType command) {
+    if (!has_generated_overworld(state)) {
+        generate_overworld(state);
+    }
     set_mode(state, result, AK_GAME_MODE_OVERWORLD, command);
     set_location(state, result, AK_GAME_LOCATION_OVERWORLD, command);
 }
@@ -420,6 +465,9 @@ static void resolve_dungeon_arrival(AkGameState *state, AkGameCommandResult *res
         state->stats[AK_GAME_STAT_GOLD] += gold;
         if (item >= AK_GAME_ITEM_FOOD && item < AK_GAME_ITEM_COUNT) {
             state->inventory[item]++;
+            if (item == AK_GAME_ITEM_FOOD) {
+                state->food_tenths += 10;
+            }
         }
         push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, AK_GAME_DUNGEON_CHEST);
     }
@@ -467,7 +515,8 @@ static void run_dungeon_monster_turns(AkGameState *state, AkGameCommandResult *r
             if ((monster == 2 || monster == 7) &&
                 ak_random_rnd(&state->random, 1.0) >= 0.5) {
                 if (monster == 7) {
-                    state->inventory[AK_GAME_ITEM_FOOD] /= 2;
+                    state->food_tenths = (state->food_tenths / 20) * 10;
+                    sync_inventory_from_food(state);
                     push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, monster);
                 } else {
                     int item = find_first_owned_item(state, &state->random);
@@ -526,6 +575,13 @@ static void run_dungeon_monster_turns(AkGameState *state, AkGameCommandResult *r
             state->monster_hit_points[monster] += monster + state->dungeon_level;
             push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, command, monster);
         }
+    }
+}
+
+static void run_dungeon_post_command(AkGameState *state, AkGameCommandResult *result, AkGameCommandType command) {
+    consume_dungeon_food(state);
+    if (state->mode == AK_GAME_MODE_DUNGEON) {
+        run_dungeon_monster_turns(state, result, command);
     }
 }
 
@@ -614,6 +670,7 @@ static AkGameResultCode apply_attack(
 
     if (monster < 1 || hit_roll < (double)(monster + state->dungeon_level)) {
         push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_ATTACK, 0);
+        run_dungeon_post_command(state, result, AK_GAME_COMMAND_ATTACK);
         return AK_GAME_RESULT_OK;
     }
 
@@ -626,6 +683,7 @@ static AkGameResultCode apply_attack(
         push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_ATTACK, -monster);
     }
 
+    run_dungeon_post_command(state, result, AK_GAME_COMMAND_ATTACK);
     return AK_GAME_RESULT_OK;
 }
 
@@ -659,11 +717,13 @@ static AkGameResultCode apply_magic(
     if (choice == 1) {
         state->dungeon[state->dungeon_x][state->dungeon_y] = AK_GAME_DUNGEON_LADDER_UP;
         push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, AK_GAME_DUNGEON_LADDER_UP);
+        run_dungeon_post_command(state, result, AK_GAME_COMMAND_CAST_MAGIC);
         return AK_GAME_RESULT_OK;
     }
     if (choice == 2) {
         state->dungeon[state->dungeon_x][state->dungeon_y] = AK_GAME_DUNGEON_LADDER_DOWN;
         push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, AK_GAME_DUNGEON_LADDER_DOWN);
+        run_dungeon_post_command(state, result, AK_GAME_COMMAND_CAST_MAGIC);
         return AK_GAME_RESULT_OK;
     }
     if (choice == 3) {
@@ -678,6 +738,7 @@ static AkGameResultCode apply_magic(
         } else {
             push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, 0);
         }
+        run_dungeon_post_command(state, result, AK_GAME_COMMAND_CAST_MAGIC);
         return AK_GAME_RESULT_OK;
     }
 
@@ -704,6 +765,9 @@ static AkGameResultCode apply_magic(
             break;
     }
     push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, AK_GAME_COMMAND_CAST_MAGIC, choice);
+    if (state->mode == AK_GAME_MODE_DUNGEON) {
+        run_dungeon_post_command(state, result, AK_GAME_COMMAND_CAST_MAGIC);
+    }
     return AK_GAME_RESULT_OK;
 }
 
@@ -770,6 +834,7 @@ AkGameResultCode ak_game_apply_command(
     }
 
     type = command->type;
+    sync_food_from_inventory(state);
 
     if (type == AK_GAME_COMMAND_RESET) {
         ak_game_init(state);
@@ -878,7 +943,7 @@ AkGameResultCode ak_game_apply_command(
             state->command_count++;
             push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, state->facing);
             push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, state->facing);
-            run_dungeon_monster_turns(state, result, type);
+            run_dungeon_post_command(state, result, type);
             return finish(result, AK_GAME_RESULT_OK);
         }
         if (type == AK_GAME_COMMAND_TURN_RIGHT) {
@@ -886,7 +951,7 @@ AkGameResultCode ak_game_apply_command(
             state->command_count++;
             push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, state->facing);
             push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, state->facing);
-            run_dungeon_monster_turns(state, result, type);
+            run_dungeon_post_command(state, result, type);
             return finish(result, AK_GAME_RESULT_OK);
         }
         if (type == AK_GAME_COMMAND_TURN_AROUND) {
@@ -894,7 +959,7 @@ AkGameResultCode ak_game_apply_command(
             state->command_count++;
             push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, state->facing);
             push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, state->facing);
-            run_dungeon_monster_turns(state, result, type);
+            run_dungeon_post_command(state, result, type);
             return finish(result, AK_GAME_RESULT_OK);
         }
 
@@ -911,7 +976,7 @@ AkGameResultCode ak_game_apply_command(
         push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, 0);
         resolve_dungeon_arrival(state, result, type);
         if (state->mode == AK_GAME_MODE_DUNGEON) {
-            run_dungeon_monster_turns(state, result, type);
+            run_dungeon_post_command(state, result, type);
         }
         if (result != NULL && result->event_count == 1) {
             push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, tile);
@@ -997,7 +1062,7 @@ AkGameResultCode ak_game_apply_command(
             return finish(result, AK_GAME_RESULT_INVALID_COMMAND);
         }
         state->command_count++;
-        enter_overworld(state, result, type);
+        return_to_overworld(state, result, type);
         push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, 0);
         return finish(result, AK_GAME_RESULT_OK);
     }
@@ -1013,7 +1078,7 @@ AkGameResultCode ak_game_apply_command(
         if (state->mode == AK_GAME_MODE_DUNGEON) {
             state->command_count++;
             push_event(result, AK_GAME_EVENT_COMMAND_ACCEPTED, state, type, 0);
-            run_dungeon_monster_turns(state, result, type);
+            run_dungeon_post_command(state, result, type);
             if (result != NULL && result->event_count == 1) {
                 push_event(result, AK_GAME_EVENT_STATE_CHANGED, state, type, 0);
             }
