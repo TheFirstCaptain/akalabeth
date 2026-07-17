@@ -4,6 +4,8 @@ This repository contains a modernization of Akalabeth, Richard Garriott's pre-Ul
 
 The project keeps the historical game flow and rules visible while adding a native macOS shell, a portable C game core, Swift tests, deterministic compatibility fixtures, save/resume support, and display options. The original README text is preserved below under "Original README".
 
+The original 1980/1981 California Pacific manual is available at the Museum of Computer Adventure Game History: <https://www.mocagh.org/origin/akalabeth-manual.pdf>.
+
 ## Requirements
 
 - macOS 13 or newer
@@ -47,10 +49,26 @@ make -C harness test
 
 ## How To Play
 
+### Manual Context
+
+The original manual frames the game as Lord British's charge to clear Akalabeth of the creatures left by Mondain. It also explains several rules that are easy to miss in a modern port:
+
+- The lucky number is the random seed. Reusing the same number recreates the same initial setup, including the map, dungeons, player generation, and monster placement.
+- The level of play scales monster strength. Level 10 monsters are described as ten times harder to destroy than level 1 monsters.
+- Hit points are the damage the player can absorb before death. They decrease when monsters hit you and increase when you leave a dungeon after slaying creatures there.
+- Strength affects the damage you can inflict.
+- Dexterity affects hit probability.
+- Stamina affects defensive staying power after sustained combat.
+- Wisdom is used by special quest routines.
+- Gold is the currency used for supplies and equipment.
+- Fighters can use rapiers and bows, but cannot control a magic amulet's effect. Mages can control magic amulets, but cannot use rapiers or bows.
+- The game starts in a town on a 20x20 overworld map. The manual strongly warns new players to buy enough food before leaving town.
+- The original Apple II controls used `X` for enter, climb, and descend actions; this port maps those actions to `E`.
+
 ### Startup
 
 1. Enter a lucky number and press Return. This seeds the world and dungeon layout.
-2. Enter a level of play and press Return.
+2. Enter a level of play and press Return. Higher levels make monsters stronger.
 3. At the character review, press `Y` to accept or `N` to reroll.
 4. Choose `F` for fighter or `M` for mage.
 
